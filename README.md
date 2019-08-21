@@ -26,6 +26,14 @@ python3 lex_gen.py \
 UMLS Engines
 ================================
 
+Using the UMLS API
+---------------------------------------------
+
+Follow instructions on the `User Authentication
+<https://documentation.uts.nlm.nih.gov/rest/authentication.html>`_
+page about generating an authentication token. You'll need to set the
+value of `UMLS_API_TOKEN` to this value in `umls_utils.py`.
+
 Installing a Local UMLS Engine
 ---------------------------------------------
 
