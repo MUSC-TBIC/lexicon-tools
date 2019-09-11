@@ -172,7 +172,7 @@ def get_rxcui_ingredients( auth_client , concepts , rxcui_str , head = None ):
 
 
 
-def parse_focused_allergens( input_filename , concepts = {} ):
+def parse_focused_allergens( input_filename , concepts = {} , partials_dir = None ):
     ##
     cui_dict = {}
     synonym_dict = {}
@@ -183,9 +183,7 @@ def parse_focused_allergens( input_filename , concepts = {} ):
         headers = next( in_tsv , None )
         for cols in tqdm( in_tsv , desc = 'Fixed rows' , total = 137 ,
                           file = sys.stdout ):
-            ## Re-up the authentication token for every row
-            auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
-            ## ALLERGEN_DESCRIPTION                
+            ## ALLERGEN_DESCRIPTION
             alt_name = cols[ 0 ]
             if( len( alt_name ) == 0 ):
                 continue
@@ -207,6 +205,17 @@ def parse_focused_allergens( input_filename , concepts = {} ):
             include_parents_str = cols[ 8 ]
             ## Children to be excluded
             exclude_children_str = cols[ 9 ] ## Children to be excluded
+            ## Do we need to process this line or can we just update our
+            ## model with a partial already saved in a pickle?
+            pickle_file = os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) )
+            if( partials_dir is not None and
+                os.path.exists( pickle_file ) ):
+                log.debug( 'Pickle file already exists for CUI {}. Loading and continuing to next.'.format( head_cui ) )
+                with open( pickle_file , 'rb' ) as fp:
+                    cui_dict , synonym_dict , concepts = pickle.load( fp )
+                continue
+            ## Re-up the authentication token for every row
+            auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
             ##
             cui_dict[ head_cui ] = {}
             synonym_dict = set()
@@ -328,6 +337,11 @@ def parse_focused_allergens( input_filename , concepts = {} ):
             #all_eng_atoms.add( head_atom )
             for cui in synonym_dict:
                 concepts = flesh_out_concept( auth_client , concepts , cui , head = head_cui )
+            ## At the end of every loop, we want to update our partial file
+            ## with the latest datastructures (in pickle form)
+            if( partials_dir is not None ):
+                with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
+                    pickle.dump( [ cui_dict , synonym_dict , concepts ] , fp )
     ####
     return( concepts )
 
@@ -339,8 +353,16 @@ def parse_focused_allergens( input_filename , concepts = {} ):
 
 def parse_focused_problems_via_api( cui_dict , concepts = {} , partials_dir = None ):
     #######################################################################
-    for head_cui in tqdm( cui_dict , desc = 'Extracting Terms' ,
+    dict_keys = sorted( cui_dict.keys() )
+    for head_cui in tqdm( dict_keys , desc = 'Extracting Terms' ,
                           file = sys.stdout ):
+        pickle_file = os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) )
+        if( partials_dir is not None and
+            os.path.exists( pickle_file ) ):
+            log.debug( 'Pickle file already exists for CUI {}. Loading and continuing to next.'.format( head_cui ) )
+            with open( pickle_file , 'rb' ) as fp:
+                cui_dict , concepts = pickle.load( fp )
+            continue
         auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
         if( 'preferred_term' not in concepts[ head_cui ] or
             concepts[ head_cui ][ 'preferred_term' ] == '' ):

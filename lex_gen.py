@@ -186,8 +186,14 @@ if __name__ == "__main__":
     log.info( 'CSV In:\t{}'.format( focused_input_filename ) )
     log.info( 'ConceptMapper Out:\t{}'.format( dict_output_filename ) )
     log.info( 'CSV Out:\t{}'.format( csv_output_filename ) )
+    if( partials_dir is not None and
+        not os.path.exists( partials_dir ) ):
+        log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
+        os.makedirs( partials_dir )
+    ##
     if( focus_type == 'focusedAllergen' ):
-        concepts = csv_u.parse_focused_allergens( focused_input_filename )
+        concepts = csv_u.parse_focused_allergens( focused_input_filename ,
+                                                  partials_dir = partials_dir )
     elif( focus_type == 'focusedProblem' ):
         ## TODO - write explanation for file contents.
         ## TODO - create function to generate a new version of this file
@@ -196,10 +202,6 @@ if __name__ == "__main__":
             csv_concepts = concepts_from_csv( csv_input_filename )
         else:
             csv_concepts = {}
-        if( partials_dir is not None and
-            not os.path.exists( partials_dir ) ):
-            log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
-            os.makedirs( partials_dir )
         cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename ,
                                                             concepts = csv_concepts ,
                                                             partials_dir = partials_dir )
