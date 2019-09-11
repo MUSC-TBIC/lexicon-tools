@@ -341,6 +341,13 @@ def parse_focused_problems_via_api( cui_dict , concepts = {} , partials_dir = No
     #######################################################################
     for head_cui in tqdm( cui_dict , desc = 'Extracting Terms' ,
                           file = sys.stdout ):
+        pickle_file = os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) )
+        if( partials_dir is not None and
+            os.path.exists( pickle_file ) ):
+            log.debug( 'Pickle file already exists for CUI {}. Loading and continuing to next.'.format( head_cui ) )
+            with open( pickle_file , 'rb' ) as fp:
+                cui_dict , concepts = pickle.load( fp )
+            continue
         auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
         if( 'preferred_term' not in concepts[ head_cui ] or
             concepts[ head_cui ][ 'preferred_term' ] == '' ):
