@@ -144,6 +144,7 @@ def concepts_from_csv( csv_filename ):
 if __name__ == "__main__":
     ## TODO - make these configurable via command line
     input_dir = 'in'
+    partials_dir = 'partials'
     output_dir = 'out'
     # TODO - add real argparser
     focus_type = sys.argv[ 1 ] ## focusedAllergen || focusedProblem
@@ -195,6 +196,12 @@ if __name__ == "__main__":
             csv_concepts = concepts_from_csv( csv_input_filename )
         else:
             csv_concepts = {}
-        cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename , concepts = csv_concepts )
+        if( partials_dir is not None and
+            not os.path.exists( partials_dir ) ):
+            log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
+            os.makedirs( partials_dir )
+        cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename ,
+                                                            concepts = csv_concepts ,
+                                                            partials_dir = partials_dir )
     concepts_to_concept_mapper( concepts , dict_output_filename )
     concepts_to_csv( concepts , csv_output_filename )

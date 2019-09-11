@@ -1,5 +1,6 @@
 
 import logging as log
+import os
 import sys
 
 import csv
@@ -8,6 +9,8 @@ from tqdm import tqdm
 
 import requests
 import json
+
+import pickle
 
 import concept_mapper_utils as cm
 import umls_utils as uu
@@ -181,7 +184,7 @@ def parse_focused_allergens( input_filename , concepts = {} ):
         for cols in tqdm( in_tsv , desc = 'Fixed rows' , total = 137 ,
                           file = sys.stdout ):
             ## Re-up the authentication token for every row
-            auth_client = uu.init_authentication( UMLS_API_TOKEN )
+            auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
             ## ALLERGEN_DESCRIPTION                
             alt_name = cols[ 0 ]
             if( len( alt_name ) == 0 ):
@@ -334,131 +337,11 @@ def parse_focused_allergens( input_filename , concepts = {} ):
 ########################################################################
 
 
-def parse_focused_problems_via_api( input_filename , concepts = {} ):
-    ##
-    cui_dict = {}
-    synonym_dict = {}
-    ##
-    auth_client = uu.init_authentication( UMLS_API_TOKEN )
-    with open( input_filename , 'r' ) as in_fp:
-        in_tsv = csv.reader( in_fp , dialect=csv.excel_tab )
-        ## Skip the header
-        headers = next( in_tsv , None )
-        for cols in in_tsv:
-            alt_name = cols[ 0 ]
-            if( len( alt_name ) == 0 ):
-                continue
-            ## UMLS concepts
-            head_cui = cols[ 1 ]
-            include_umls_parents_str = cols[ 2 ]
-            parents_str = None ## cols[ 3 ] set later if not None
-            include_ro_str = cols[ 4 ]
-            ro_str = None ## cols[ 5 ] set later if not none
-            ## SNOMED concepts 
-            snomed_concepts_str = cols[ 6 ] ## SNOMED-CT conceptsIDs
-            include_snomed_parents_str = cols[ 7 ] ## Include parents (SNOMED ancestors)?
-            ancestors_str = cols[ 8 ] ## Ancestors to include (if some)
-            descendants_exclude_str = cols[ 9 ] ## Children to be excluded
-            #vocabulary = 'SNOMEDCT_US'
-            #cui , alt_name = get_cui( auth_client , 'current' , c_code , vocabulary ).split( '\t' )
-            ##
-            log.debug( 'Old CUI:\t{}'.format( head_cui ) )
-            cui_dict[ head_cui ] = {}
-            synonym_dict[ head_cui ] = set()
-            if( head_cui not in concepts ):
-                concepts[ head_cui ] = {}
-            cui_dict[ head_cui ][ 'include_parents_flag' ] = None
-            cui_dict[ head_cui ][ 'parents_include_list' ] = []
-            cui_dict[ head_cui ][ 'descendants_include_list' ] = []
-            cui_dict[ head_cui ][ 'descendants_exclude_list' ] = []
-            cui_dict[ head_cui ][ 'include_ro_flag' ] = None
-            cui_dict[ head_cui ][ 'ro_include_list' ] = []
-            cui_dict[ head_cui ][ 'ro_exclude_list' ] = []
-            cui_dict[ head_cui ][ 'snomed_include_list' ] = []
-            ## Child CUIs to Exclude
-            if( descendants_exclude_str != '' ):
-                for this_cui in descendants_exclude_str.split( ',' ):
-                    this_cui = this_cui.lstrip( ' ' )
-                    this_cui = this_cui.strip( '"' )
-                    cui_dict[ head_cui ][ 'descendants_exclude_list' ].append( this_cui )
-                    log.debug( '\tEx: {}'.format( this_cui ) )
-            ## Include UMLS Parents (RN)
-            ## Include UMLS RO (related other)
-            ## Include SNOMED Concepts -> CUIs
-            ## Include SNOMED Parents (ISA)
-            if( include_umls_parents_str.lower() == 'no' ):
-                cui_dict[ head_cui ][ 'include_parents_flag' ] = False
-            elif( include_umls_parents_str.lower() == 'yes' ):
-                cui_dict[ head_cui ][ 'include_parents_flag' ] = True
-            elif( include_umls_parents_str.lower() == 'some' ):
-                cui_dict[ head_cui ][ 'include_parents_flag' ] = True
-                parents_str = cols[ 3 ]
-                for this_cui in parents_str.split( ',' ):
-                    this_cui = this_cui.strip( )
-                    this_cui = this_cui.strip( '"' )
-                    cui_dict[ head_cui ][ 'parents_include_list' ].append( this_cui )
-                    log.debug( '\tP:  {}'.format( this_cui ) )
-            else:
-                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include Parents Flag' ,
-                                                     include_umls_parents_str ) )
-            # ##
-            if( include_ro_str.lower() == 'yes' ):
-                cui_dict[ head_cui ][ 'include_ro_flag' ] = True
-                ro_str = cols[ 5 ]
-                if( ro_str != '' ):
-                    for this_cui in ro_str.split( ',' ):
-                        this_cui = this_cui.lstrip( ' ' )
-                        this_cui = this_cui.strip( '"' )
-                        cui_dict[ head_cui ][ 'ro_exclude_list' ].append( this_cui )
-            elif( include_ro_str.lower() == 'no' ):
-                cui_dict[ head_cui ][ 'include_ro_flag' ] = False
-            else:
-                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include RO Flag' ,
-                                                     include_ro_str ) )
-            #####
-            snomed_parent_cuis = set()
-            cui_dict[ head_cui ][ 'snomed_parent_list' ] = []
-            if( include_snomed_parents_str.lower() == 'no' ):
-                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = False
-            elif( include_snomed_parents_str.lower() == 'some' ):
-                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = True
-                for this_concept in ancestors_str.split( ',' ):
-                    this_concept = this_concept.strip( )
-                    this_concept = this_concept.strip( '"' )
-                    this_parent_cui = uu.get_cui( auth_client , 'current' , this_concept , 'SNOMEDCT_US' )
-                    if( this_parent_cui not in cui_dict[ head_cui ][ 'parents_include_list' ] ):
-                        ## TODO - track snomed cid with this CUI for later dictionary entry
-                        cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
-            elif( include_snomed_parents_str.lower() == 'yes' ):
-                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = True
-                for this_concept in snomed_concepts_str.split( ',' ):
-                    this_concept = this_concept.strip( )
-                    this_concept = this_concept.strip( '"' )
-                    log.debug( '\tSn: {}'.format( this_concept ) )
-                    this_parent_cuis = uu.get_parents( auth_client , 'current' , head_cui , 'SNOMEDCT_US' ,
-                                                       atoms = [ this_concept ] )
-                    for this_parent_cui in this_parent_cuis:
-                        if( this_parent_cui not in cui_dict[ head_cui ][ 'parents_include_list' ] ):
-                            ## TODO - track snomed cid with this CUI for later dictionary entry
-                            cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
-            else:
-                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include SNOMED Parents Flag' ,
-                                                      include_snomed_parents_str ) )
-            ########################
-            
-            ##
-            if( snomed_concepts_str == 'None' or
-                snomed_concepts_str is None ):
-                continue
-            for this_concept in snomed_concepts_str.split( ',' ):
-                this_concept = this_concept.strip( )
-                this_concept = this_concept.strip( '"' )
-                log.debug( '\tSn: {}'.format( this_concept ) )
-                cui_dict[ head_cui ][ 'snomed_include_list' ].append( this_concept )
+def parse_focused_problems_via_api( cui_dict , concepts = {} , partials_dir = None ):
     #######################################################################
     for head_cui in tqdm( cui_dict , desc = 'Extracting Terms' ,
                           file = sys.stdout ):
-        auth_client = uu.init_authentication( '4478848a-ec9d-405b-bd90-87fe66331d79' )
+        auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
         if( 'preferred_term' not in concepts[ head_cui ] or
             concepts[ head_cui ][ 'preferred_term' ] == '' ):
             preferred_term = uu.get_cuis_preferred_atom( auth_client ,
@@ -533,11 +416,16 @@ def parse_focused_problems_via_api( input_filename , concepts = {} ):
                 log.debug( '\t\tD:  {}'.format( descendant_cui ) )
                 concepts = flesh_out_concept( auth_client , concepts , descendant_cui , head = head_cui )
         log.debug( 'Done with SNOMED' )
+        ## At the end of every loop, we want to update our partial file
+        ## with the latest datastructures (in pickle form)
+        if( partials_dir is not None ):
+            with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
+                pickle.dump( [ cui_dict , concepts ] , fp )
         ##print( '{}\t{}'.format( cui , preferred_term ) )
     return( cui_dict , concepts )
 
 
-def parse_focused_problems_via_py_umls( input_filename , concepts ):
+def parse_focused_problems_via_py_umls( input_filename , concepts , partials_dir = None ):
     ##
     concepts = {}
     cui_dict = {}
@@ -707,14 +595,160 @@ def parse_focused_problems_via_py_umls( input_filename , concepts ):
     return( cui_dict , concepts )
 
 
-def parse_focused_problems( input_filename , concepts = {} ,
-                            engine = 'api' ):
+def parse_focused_problems_tsv( input_filename ,
+                                concepts = {} ):
+    ##
+    auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
+    cui_dict = {}
+    ##
+    with open( input_filename , 'r' ) as in_fp:
+        in_tsv = csv.reader( in_fp , dialect=csv.excel_tab )
+        ## Skip the header
+        headers = next( in_tsv , None )
+        for cols in in_tsv:
+            alt_name = cols[ 0 ]
+            if( len( alt_name ) == 0 ):
+                continue
+            ## UMLS concepts
+            head_cui = cols[ 1 ]
+            include_umls_parents_str = cols[ 2 ]
+            parents_str = None ## cols[ 3 ] set later if not None
+            include_ro_str = cols[ 4 ]
+            ro_str = None ## cols[ 5 ] set later if not none
+            ## SNOMED concepts 
+            snomed_concepts_str = cols[ 6 ] ## SNOMED-CT conceptsIDs
+            include_snomed_parents_str = cols[ 7 ] ## Include parents (SNOMED ancestors)?
+            ancestors_str = cols[ 8 ] ## Ancestors to include (if some)
+            descendants_exclude_str = cols[ 9 ] ## Children to be excluded
+            #vocabulary = 'SNOMEDCT_US'
+            #cui , alt_name = get_cui( auth_client , 'current' , c_code , vocabulary ).split( '\t' )
+            ##
+            log.debug( 'Old CUI:\t{}'.format( head_cui ) )
+            cui_dict[ head_cui ] = {}
+            if( head_cui not in concepts ):
+                concepts[ head_cui ] = {}
+            cui_dict[ head_cui ][ 'include_parents_flag' ] = None
+            cui_dict[ head_cui ][ 'parents_include_list' ] = []
+            cui_dict[ head_cui ][ 'descendants_include_list' ] = []
+            cui_dict[ head_cui ][ 'descendants_exclude_list' ] = []
+            cui_dict[ head_cui ][ 'include_ro_flag' ] = None
+            cui_dict[ head_cui ][ 'ro_include_list' ] = []
+            cui_dict[ head_cui ][ 'ro_exclude_list' ] = []
+            cui_dict[ head_cui ][ 'snomed_include_list' ] = []
+            ## Child CUIs to Exclude
+            if( descendants_exclude_str != '' ):
+                for this_cui in descendants_exclude_str.split( ',' ):
+                    this_cui = this_cui.lstrip( ' ' )
+                    this_cui = this_cui.strip( '"' )
+                    cui_dict[ head_cui ][ 'descendants_exclude_list' ].append( this_cui )
+                    log.debug( '\tEx: {}'.format( this_cui ) )
+            ## Include UMLS Parents (RN)
+            ## Include UMLS RO (related other)
+            ## Include SNOMED Concepts -> CUIs
+            ## Include SNOMED Parents (ISA)
+            if( include_umls_parents_str.lower() == 'no' ):
+                cui_dict[ head_cui ][ 'include_parents_flag' ] = False
+            elif( include_umls_parents_str.lower() == 'yes' ):
+                cui_dict[ head_cui ][ 'include_parents_flag' ] = True
+            elif( include_umls_parents_str.lower() == 'some' ):
+                cui_dict[ head_cui ][ 'include_parents_flag' ] = True
+                parents_str = cols[ 3 ]
+                for this_cui in parents_str.split( ',' ):
+                    this_cui = this_cui.strip( )
+                    this_cui = this_cui.strip( '"' )
+                    cui_dict[ head_cui ][ 'parents_include_list' ].append( this_cui )
+                    log.debug( '\tP:  {}'.format( this_cui ) )
+            else:
+                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include Parents Flag' ,
+                                                        include_umls_parents_str ) )
+            # ##
+            if( include_ro_str.lower() == 'yes' ):
+                cui_dict[ head_cui ][ 'include_ro_flag' ] = True
+                ro_str = cols[ 5 ]
+                if( ro_str != '' ):
+                    for this_cui in ro_str.split( ',' ):
+                        this_cui = this_cui.lstrip( ' ' )
+                        this_cui = this_cui.strip( '"' )
+                        cui_dict[ head_cui ][ 'ro_exclude_list' ].append( this_cui )
+            elif( include_ro_str.lower() == 'no' ):
+                cui_dict[ head_cui ][ 'include_ro_flag' ] = False
+            else:
+                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include RO Flag' ,
+                                                     include_ro_str ) )
+            #####
+            snomed_parent_cuis = set()
+            cui_dict[ head_cui ][ 'snomed_parent_list' ] = []
+            if( include_snomed_parents_str.lower() == 'no' ):
+                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = False
+            elif( include_snomed_parents_str.lower() == 'some' ):
+                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = True
+                for this_concept in ancestors_str.split( ',' ):
+                    this_concept = this_concept.strip( )
+                    this_concept = this_concept.strip( '"' )
+                    this_parent_cui = uu.get_cui( auth_client , 'current' , this_concept , 'SNOMEDCT_US' )
+                    if( this_parent_cui not in cui_dict[ head_cui ][ 'parents_include_list' ] ):
+                        ## TODO - track snomed cid with this CUI for later dictionary entry
+                        cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
+            elif( include_snomed_parents_str.lower() == 'yes' ):
+                cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = True
+                for this_concept in snomed_concepts_str.split( ',' ):
+                    this_concept = this_concept.strip( )
+                    this_concept = this_concept.strip( '"' )
+                    log.debug( '\tSn: {}'.format( this_concept ) )
+                    this_parent_cuis = uu.get_parents( auth_client , 'current' , head_cui , 'SNOMEDCT_US' ,
+                                                       atoms = [ this_concept ] )
+                    for this_parent_cui in this_parent_cuis:
+                        if( this_parent_cui not in cui_dict[ head_cui ][ 'parents_include_list' ] ):
+                            ## TODO - track snomed cid with this CUI for later dictionary entry
+                            cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
+            else:
+                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include SNOMED Parents Flag' ,
+                                                      include_snomed_parents_str ) )
+            ########################            
+            ##
+            if( snomed_concepts_str == 'None' or
+                snomed_concepts_str is None ):
+                continue
+            for this_concept in snomed_concepts_str.split( ',' ):
+                this_concept = this_concept.strip( )
+                this_concept = this_concept.strip( '"' )
+                log.debug( '\tSn: {}'.format( this_concept ) )
+                cui_dict[ head_cui ][ 'snomed_include_list' ].append( this_concept )
+    ##
+    return( cui_dict , concepts )
+
+
+def parse_focused_problems( input_filename ,
+                            concepts = {} ,
+                            engine = 'api' ,
+                            partials_dir = None ):
+    ## If no patials directory was provided, then initialized these
+    ## datastructures as empty
+    if( partials_dir is not None and
+        os.path.exists( os.path.join( partials_dir , 'parsed_tsv.pkl' ) ) ):
+        log.debug( 'Loading parsed_tsv.pkl' )
+        with open( os.path.join( partials_dir , 'parsed_tsv.pkl' ) , 'rb' ) as fp:
+            cui_dict , concepts = pickle.load( fp )
+    else:
+        cui_dict , concepts = parse_focused_problems_tsv( input_filename = input_filename ,
+                                                          concepts = concepts )
+        ## After we're done processing the tsv, we want to update our partial file
+        ## with the latest datastructures (in pickle form)
+        if( partials_dir is not None ):
+            log.debug( '\tSaving partials file for parsed tsv' )
+            with open( os.path.join( partials_dir , 'parsed_tsv.pkl' ) , 'wb' ) as fp:
+                pickle.dump( [ cui_dict , concepts ] , fp )
+    ##
     if( engine == 'api' and
-        UMLS_API_TOKEN is not None ):
-        cui_dict , concepts = parse_focused_problems_via_api( input_filename , concepts )
+        uu.UMLS_API_TOKEN is not None ):
+        cui_dict , concepts = parse_focused_problems_via_api( cui_dict ,
+                                                              concepts ,
+                                                              partials_dir = partials_dir )
     elif( engine == 'py-umls' and
           umls_lu is not None ):
-        cui_dict , concepts = parse_focused_problems_via_py_umls( input_filename , concepts )
+        cui_dict , concepts = parse_focused_problems_via_py_umls( input_filename ,
+                                                                  concepts ,
+                                                                  partials_dir = partials_dir )
     return( cui_dict , concepts )
 
 
