@@ -39,7 +39,7 @@ def add_variant_term( auth_client , concepts , cui , variant , head = None ):
         concepts[ cui ][ 'tui' ] = ''
         concepts[ cui ][ 'variant_terms' ] = set()
     if( variant not in concepts[ cui ][ 'variant_terms' ] ):
-        concepts[ cui ][ 'variant_terms' ].append( variant )
+        concepts[ cui ][ 'variant_terms' ].add( variant )
     return( concepts )
 
 def flesh_out_concept( auth_client , concepts , cui , head = None ):
@@ -380,7 +380,7 @@ def parse_focused_problems_via_api( cui_dict , concepts = {} , partials_dir = No
             concepts[ head_cui ][ 'tui' ] = tui
         ##
         if( 'variant_terms' not in concepts[ head_cui ] or
-            concepts[ head_cui ][ 'variant_terms' ] == '' ):
+            not bool( concepts[ head_cui ][ 'variant_terms' ] ) ):
             variant_terms = uu.get_cuis_eng_atom( auth_client ,
                                                   'current' ,
                                                   head_cui )
@@ -546,7 +546,7 @@ def parse_focused_problems_via_py_umls( input_filename , concepts , partials_dir
             log.debug( '\tTUI:\t{}'.format( semantic_type ) )
         ##
         if( 'variant_terms' not in concepts[ head_cui ] or
-            concepts[ head_cui ][ 'variant_terms' ] == '' ):
+            not bool( concepts[ head_cui ][ 'variant_terms' ] ) ):
             variant_terms = set()
             for term_pair in umls_lu.lookup_variants( head_cui , sources = 'MTH' ):
                 variant_term , term_source = term_pair
