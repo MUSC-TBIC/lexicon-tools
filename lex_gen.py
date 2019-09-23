@@ -101,6 +101,50 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
                     encoding = 'UTF-8' ,
                     pretty_print = True )
 
+def concepts_to_binary_csv( concepts , csv_filename ,
+                            exclude_terms_flag = True ,
+                            symmetric_flag = False ,
+                            cui_list = None ,
+                            append_to_csv = False ):
+    if( not append_to_csv ):
+        open( csv_filename , 'w' ).close()
+    if( cui_list is None ):
+        cui_list = sorted( concepts )
+    for cui in cui_list:
+        if( 'head_cui' in concepts[ cui ] ):
+            headCui = concepts[ cui ][ 'head_cui' ]
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , cui ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( cui , headCui ) )
+        elif( exclude_terms_flag ):
+            ## No head_cui means that this *is* a head_cui
+            ## and so we won't find any interesting cuis
+            ## associated with it. Since we aren't
+            ## writing out any terms for the cui, there
+            ## is nothing to do.
+            continue
+        else:
+            headCui = cui
+        if( exclude_terms_flag ):
+            continue
+        if( 'preferred_term' in concepts[ cui ] ):
+            preferred_term = concepts[ cui ][ 'preferred_term' ]
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , preferred_term ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( preferred_term , headCui ) )
+        else:
+            preferred_term = None
+        for term in sorted( concepts[ cui ][ 'variant_terms' ] ):
+            if( term == preferred_term ):
+                continue
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , term ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( term , headCui ) )
+
+
 def concepts_to_csv( concepts , csv_filename , cui_list = None , append_to_csv = False ):
     if( not append_to_csv ):
         open( csv_filename , 'w' ).close()
@@ -179,13 +223,21 @@ if __name__ == "__main__":
     dict_output_filename = os.path.join( output_dir ,
                                          'conceptMapper_{}_{}.dict'.format( focus_type ,
                                                                             set_num ) )
+    binary_csv_output_filename = os.path.join( output_dir ,
+                                               'binarydict_{}_{}.csv'.format( focus_type ,
+                                                                              set_num ) )
     csv_output_filename = os.path.join( output_dir ,
                                         '4waydict_{}_{}.csv'.format( focus_type ,
                                                                      set_num ) )
+    wide_csv_output_filename = os.path.join( output_dir ,
+                                             'widedict_{}_{}.csv'.format( focus_type ,
+                                                                          set_num ) )
     ##
     log.info( 'CSV In:\t{}'.format( focused_input_filename ) )
     log.info( 'ConceptMapper Out:\t{}'.format( dict_output_filename ) )
-    log.info( 'CSV Out:\t{}'.format( csv_output_filename ) )
+    log.info( 'CSV Outs:\n\t{}\n\t{}\n\t{}'.format( binary_csv_output_filename ,
+                                                    csv_output_filename ,
+                                                    wide_csv_output_filename ) )
     if( partials_dir is not None and
         not os.path.exists( partials_dir ) ):
         log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
@@ -206,4 +258,6 @@ if __name__ == "__main__":
                                                             concepts = csv_concepts ,
                                                             partials_dir = partials_dir )
     concepts_to_concept_mapper( concepts , dict_output_filename )
-    concepts_to_csv( concepts , csv_output_filename )
+    concepts_to_binary_csv( concepts , binary_csv_output_filename )
+    concepts_to_4col_csv( concepts , csv_output_filename )
+    #concepts_to_wide_csv( concepts , wide_csv_output_filename )
