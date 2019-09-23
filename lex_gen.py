@@ -135,9 +135,9 @@ def concepts_from_csv( csv_filename ):
                 concepts[ cui ] = {}
                 concepts[ cui ][ 'preferred_term' ] = preferred_term
                 concepts[ cui ][ 'tui' ] = tui
-                concepts[ cui ][ 'variant_terms' ] = []
+                concepts[ cui ][ 'variant_terms' ] = set()
             ##
-            concepts[ cui ][ 'variant_terms' ].append( term )
+            concepts[ cui ][ 'variant_terms' ].add( term )
     return( concepts )
 
 
