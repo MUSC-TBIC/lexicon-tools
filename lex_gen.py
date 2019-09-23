@@ -166,6 +166,51 @@ def concepts_to_csv( concepts , csv_filename , cui_list = None , append_to_csv =
                                                      preferred_term ,
                                                      tui ) )
 
+
+def concepts_to_wide_csv( concepts , csv_filename ,
+                          exclude_terms_flag = True ,
+                          cui_list = None ,
+                          append_to_csv = False ):
+    if( not append_to_csv ):
+        open( csv_filename , 'w' ).close()
+    if( cui_list is None ):
+        cui_list = sorted( concepts )
+    wide_list = {}
+    for cui in cui_list:
+        if( 'head_cui' in concepts[ cui ] ):
+            headCui = concepts[ cui ][ 'head_cui' ]
+            if( headCui not in wide_list ):
+                wide_list[ headCui ] = set()
+            wide_list[ headCui ].add( cui )
+        else:
+            if( cui not in wide_list ):
+                wide_list[ cui ] = set()
+            if( exclude_terms_flag ):
+                ## No head_cui means that this *is* a head_cui
+                ## and so we won't find any interesting cuis
+                ## associated with it. Since we aren't
+                ## writing out any terms for the cui, there
+                ## is nothing to do after we make sure it
+                ## is in the wide_list for printing.
+                if( cui not in wide_list ):
+                    wide_list[ cui ] = set()
+                continue
+            headCui = cui
+        if( exclude_terms_flag ):
+            continue
+        if( 'preferred_term' in concepts[ cui ] ):
+            preferred_term = concepts[ cui ][ 'preferred_term' ]
+            wide_list[ head_cui ].add( preferred_term )
+        for term in sorted( concepts[ cui ][ 'variant_terms' ] ):
+            wide_list[ head_cui ].add( term )
+    for head_cui in wide_list:
+        with open( csv_filename , 'a' ) as fp:
+            fp.write( '{}'.format( head_cui ) )
+            for related_cui_or_term in wide_list[ head_cui ]:
+                fp.write( '\t{}'.format( related_cui_or_term ) )
+            fp.write( '\n' )
+
+
 def concepts_from_csv( csv_filename ):
     concepts = {}
     with open( csv_filename , 'r' ) as in_fp:
@@ -260,4 +305,4 @@ if __name__ == "__main__":
     concepts_to_concept_mapper( concepts , dict_output_filename )
     concepts_to_binary_csv( concepts , binary_csv_output_filename )
     concepts_to_4col_csv( concepts , csv_output_filename )
-    #concepts_to_wide_csv( concepts , wide_csv_output_filename )
+    concepts_to_wide_csv( concepts , wide_csv_output_filename )
