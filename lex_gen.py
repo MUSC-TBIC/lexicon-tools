@@ -39,6 +39,9 @@ import umls_utils as uu
 
 
 def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = None ):
+    """
+    Convert the `concepts` data structure to ConceptMapper output
+    """
     root = cm.create_concept_mapper_template()
     if( cui_list is None ):
         cui_list = sorted( concepts )
@@ -145,7 +148,7 @@ def concepts_to_binary_csv( concepts , csv_filename ,
                     fp.write( '{}\t{}\n'.format( term , headCui ) )
 
 
-def concepts_to_csv( concepts , csv_filename , cui_list = None , append_to_csv = False ):
+def concepts_to_4col_csv( concepts , csv_filename , cui_list = None , append_to_csv = False ):
     if( not append_to_csv ):
         open( csv_filename , 'w' ).close()
     if( cui_list is None ):
@@ -200,10 +203,12 @@ def concepts_to_wide_csv( concepts , csv_filename ,
             continue
         if( 'preferred_term' in concepts[ cui ] ):
             preferred_term = concepts[ cui ][ 'preferred_term' ]
-            wide_list[ head_cui ].add( preferred_term )
+            wide_list[ headCui ].add( preferred_term )
         for term in sorted( concepts[ cui ][ 'variant_terms' ] ):
-            wide_list[ head_cui ].add( term )
+            wide_list[ headCui ].add( term )
     for head_cui in wide_list:
+        if( head_cui is None ):
+            continue
         with open( csv_filename , 'a' ) as fp:
             fp.write( '{}'.format( head_cui ) )
             for related_cui_or_term in wide_list[ head_cui ]:
@@ -302,7 +307,13 @@ if __name__ == "__main__":
         cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename ,
                                                             concepts = csv_concepts ,
                                                             partials_dir = partials_dir )
+    elif( focus_type == 'loadPickle' ):
+        with open( focused_input_filename , 'rb' ) as fp:
+            cui_dict , concepts = pickle.load( fp )
+    ##
     concepts_to_concept_mapper( concepts , dict_output_filename )
-    concepts_to_binary_csv( concepts , binary_csv_output_filename )
+    concepts_to_binary_csv( concepts , binary_csv_output_filename ,
+                            exclude_terms_flag = False )
     concepts_to_4col_csv( concepts , csv_output_filename )
-    concepts_to_wide_csv( concepts , wide_csv_output_filename )
+    concepts_to_wide_csv( concepts , wide_csv_output_filename ,
+                          exclude_terms_flag = False )
