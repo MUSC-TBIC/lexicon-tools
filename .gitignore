@@ -3,6 +3,7 @@
 *.csv
 *.pyc
 
+docs/_build
 in/
 out/
 umls/

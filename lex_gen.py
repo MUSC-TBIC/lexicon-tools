@@ -39,6 +39,9 @@ import umls_utils as uu
 
 
 def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = None ):
+    """
+    Convert the `concepts` data structure to ConceptMapper output
+    """
     root = cm.create_concept_mapper_template()
     if( cui_list is None ):
         cui_list = sorted( concepts )
@@ -101,7 +104,51 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
                     encoding = 'UTF-8' ,
                     pretty_print = True )
 
-def concepts_to_csv( concepts , csv_filename , cui_list = None , append_to_csv = False ):
+def concepts_to_binary_csv( concepts , csv_filename ,
+                            exclude_terms_flag = True ,
+                            symmetric_flag = False ,
+                            cui_list = None ,
+                            append_to_csv = False ):
+    if( not append_to_csv ):
+        open( csv_filename , 'w' ).close()
+    if( cui_list is None ):
+        cui_list = sorted( concepts )
+    for cui in cui_list:
+        if( 'head_cui' in concepts[ cui ] ):
+            headCui = concepts[ cui ][ 'head_cui' ]
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , cui ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( cui , headCui ) )
+        elif( exclude_terms_flag ):
+            ## No head_cui means that this *is* a head_cui
+            ## and so we won't find any interesting cuis
+            ## associated with it. Since we aren't
+            ## writing out any terms for the cui, there
+            ## is nothing to do.
+            continue
+        else:
+            headCui = cui
+        if( exclude_terms_flag ):
+            continue
+        if( 'preferred_term' in concepts[ cui ] ):
+            preferred_term = concepts[ cui ][ 'preferred_term' ]
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , preferred_term ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( preferred_term , headCui ) )
+        else:
+            preferred_term = None
+        for term in sorted( concepts[ cui ][ 'variant_terms' ] ):
+            if( term == preferred_term ):
+                continue
+            with open( csv_filename , 'a' ) as fp:
+                fp.write( '{}\t{}\n'.format( headCui , term ) )
+                if( symmetric_flag ):
+                    fp.write( '{}\t{}\n'.format( term , headCui ) )
+
+
+def concepts_to_4col_csv( concepts , csv_filename , cui_list = None , append_to_csv = False ):
     if( not append_to_csv ):
         open( csv_filename , 'w' ).close()
     if( cui_list is None ):
@@ -122,6 +169,53 @@ def concepts_to_csv( concepts , csv_filename , cui_list = None , append_to_csv =
                                                      preferred_term ,
                                                      tui ) )
 
+
+def concepts_to_wide_csv( concepts , csv_filename ,
+                          exclude_terms_flag = True ,
+                          cui_list = None ,
+                          append_to_csv = False ):
+    if( not append_to_csv ):
+        open( csv_filename , 'w' ).close()
+    if( cui_list is None ):
+        cui_list = sorted( concepts )
+    wide_list = {}
+    for cui in cui_list:
+        if( 'head_cui' in concepts[ cui ] ):
+            headCui = concepts[ cui ][ 'head_cui' ]
+            if( headCui not in wide_list ):
+                wide_list[ headCui ] = set()
+            wide_list[ headCui ].add( cui )
+        else:
+            if( cui not in wide_list ):
+                wide_list[ cui ] = set()
+            if( exclude_terms_flag ):
+                ## No head_cui means that this *is* a head_cui
+                ## and so we won't find any interesting cuis
+                ## associated with it. Since we aren't
+                ## writing out any terms for the cui, there
+                ## is nothing to do after we make sure it
+                ## is in the wide_list for printing.
+                if( cui not in wide_list ):
+                    wide_list[ cui ] = set()
+                continue
+            headCui = cui
+        if( exclude_terms_flag ):
+            continue
+        if( 'preferred_term' in concepts[ cui ] ):
+            preferred_term = concepts[ cui ][ 'preferred_term' ]
+            wide_list[ headCui ].add( preferred_term )
+        for term in sorted( concepts[ cui ][ 'variant_terms' ] ):
+            wide_list[ headCui ].add( term )
+    for head_cui in wide_list:
+        if( head_cui is None ):
+            continue
+        with open( csv_filename , 'a' ) as fp:
+            fp.write( '{}'.format( head_cui ) )
+            for related_cui_or_term in wide_list[ head_cui ]:
+                fp.write( '\t{}'.format( related_cui_or_term ) )
+            fp.write( '\n' )
+
+
 def concepts_from_csv( csv_filename ):
     concepts = {}
     with open( csv_filename , 'r' ) as in_fp:
@@ -135,15 +229,16 @@ def concepts_from_csv( csv_filename ):
                 concepts[ cui ] = {}
                 concepts[ cui ][ 'preferred_term' ] = preferred_term
                 concepts[ cui ][ 'tui' ] = tui
-                concepts[ cui ][ 'variant_terms' ] = []
+                concepts[ cui ][ 'variant_terms' ] = set()
             ##
-            concepts[ cui ][ 'variant_terms' ].append( term )
+            concepts[ cui ][ 'variant_terms' ].add( term )
     return( concepts )
 
 
 if __name__ == "__main__":
     ## TODO - make these configurable via command line
     input_dir = 'in'
+    partials_dir = 'partials'
     output_dir = 'out'
     # TODO - add real argparser
     focus_type = sys.argv[ 1 ] ## focusedAllergen || focusedProblem
@@ -178,15 +273,29 @@ if __name__ == "__main__":
     dict_output_filename = os.path.join( output_dir ,
                                          'conceptMapper_{}_{}.dict'.format( focus_type ,
                                                                             set_num ) )
+    binary_csv_output_filename = os.path.join( output_dir ,
+                                               'binarydict_{}_{}.csv'.format( focus_type ,
+                                                                              set_num ) )
     csv_output_filename = os.path.join( output_dir ,
                                         '4waydict_{}_{}.csv'.format( focus_type ,
                                                                      set_num ) )
+    wide_csv_output_filename = os.path.join( output_dir ,
+                                             'widedict_{}_{}.csv'.format( focus_type ,
+                                                                          set_num ) )
     ##
     log.info( 'CSV In:\t{}'.format( focused_input_filename ) )
     log.info( 'ConceptMapper Out:\t{}'.format( dict_output_filename ) )
-    log.info( 'CSV Out:\t{}'.format( csv_output_filename ) )
+    log.info( 'CSV Outs:\n\t{}\n\t{}\n\t{}'.format( binary_csv_output_filename ,
+                                                    csv_output_filename ,
+                                                    wide_csv_output_filename ) )
+    if( partials_dir is not None and
+        not os.path.exists( partials_dir ) ):
+        log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
+        os.makedirs( partials_dir )
+    ##
     if( focus_type == 'focusedAllergen' ):
-        concepts = csv_u.parse_focused_allergens( focused_input_filename )
+        concepts = csv_u.parse_focused_allergens( focused_input_filename ,
+                                                  partials_dir = partials_dir )
     elif( focus_type == 'focusedProblem' ):
         ## TODO - write explanation for file contents.
         ## TODO - create function to generate a new version of this file
@@ -195,6 +304,19 @@ if __name__ == "__main__":
             csv_concepts = concepts_from_csv( csv_input_filename )
         else:
             csv_concepts = {}
-        cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename , concepts = csv_concepts )
+        cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename ,
+                                                            concepts = csv_concepts ,
+                                                            partials_dir = partials_dir )
+    elif( focus_type == 'loadPickle' ):
+        with open( focused_input_filename , 'rb' ) as fp:
+            cui_dict , concepts = pickle.load( fp )
+    else:
+        log.error( 'Unknown or unrecognized \'focus_type\':  {}'.format( focus_type ) )
+        exit( 1 )
+    ##
     concepts_to_concept_mapper( concepts , dict_output_filename )
-    concepts_to_csv( concepts , csv_output_filename )
+    concepts_to_binary_csv( concepts , binary_csv_output_filename ,
+                            exclude_terms_flag = False )
+    concepts_to_4col_csv( concepts , csv_output_filename )
+    concepts_to_wide_csv( concepts , wide_csv_output_filename ,
+                          exclude_terms_flag = False )
