@@ -20,7 +20,11 @@ def initialize_arg_parser():
     
     parser.add_argument( '--input-file' , default = None ,
                          dest = 'inputFile' ,
-                         help = 'Input file to read the knowledgebase concepts from' )
+                         help = 'Input file to read the knowledgebase concepts from (used with csv format)' )
+     
+    parser.add_argument( '--input-dir' , default = None ,
+                         dest = 'inputDir' ,
+                         help = 'Input directory containing necessary .RRF files to read the knowledgebase concepts from (used with RxNorm and MRCONSO formats)' )
      
     parser.add_argument( '--input-format' , default = 'csv' ,
                          choices = [ 'csv' , 'RxNorm' , 'MRCONSO' ] ,
@@ -30,6 +34,14 @@ def initialize_arg_parser():
     parser.add_argument( '--output-file' , default = None ,
                          dest = 'outputFile' ,
                          help = 'Output file to write to (if no file is provided, output goes to stdout)' )
+    
+    parser.add_argument( '--output-prefix' , default = None ,
+                         dest = 'outputPrefix' ,
+                         help = 'Prefix of path for output files (used by RxNorm input)' )
+    
+    parser.add_argument( '--output-suffix' , default = None ,
+                         dest = 'outputSuffix' ,
+                         help = 'Suffix of path for output files (used by RxNorm input)' )
     
     parser.add_argument( '--output-format' , default = 'ttl' ,
                          choices = [ 'ttl' ] ,
@@ -54,8 +66,14 @@ def init_args( command_line_args ):
     ##
     bad_args_flag = False
     ##
-    if( args.outputFile is not None ):
+    if( args.inputFormat == 'csv' and args.outputFile is not None ):
         open( args.outputFile , 'w' ).close()
+    elif( args.inputFormat == 'RxNorm' ):
+        for outputInfix in [ 'Ingredients' , 'Brands' ]:
+            open( '{}{}{}'.format( args.outputPrefix ,
+                                   outputInfix ,
+                                   args.outputSuffix ) , 
+                  'w' ).close()
     ##
     if( bad_args_flag ):
         log.error( "I'm bailing out of this run because of errors mentioned above." )
@@ -81,6 +99,7 @@ def parse_csv( csvFile , outputFile ):
                  'Disease' : 'node1eoocu2ncx2' ,
                  'Sign or Symptom' : 'node1eoocu2ncx3' }
     current_id = 4
+    kb_stats = { 'total_concepts' : 0 }
     with open( csvFile , 'r' ) as fp:
         csv_dict_reader = DictReader( fp , dialect = 'excel-tab' )
         for fields in csv_dict_reader:
@@ -115,7 +134,14 @@ def parse_csv( csvFile , outputFile ):
                         '  :label "{}"@en;'.format( this_type ) )
             dump_lines( outputFile ,
                         '  :subClassOf <{}> .\n'.format( parent_node ) )
+            kb_stats[ 'total_concepts' ] += 1
+    ##
+    return( kb_stats )
 
+def parse_rxnorm( inputDir , outputPrefix , outputSuffix, ):
+    kb_stats = { 'total_concepts' : 0 }
+    ##
+    return( kb_stats )
 
 if __name__ == "__main__":
     ##
@@ -126,11 +152,24 @@ if __name__ == "__main__":
         with open( args.prefixFile , 'r' ) as in_fp:
             for line in in_fp:
                 line = line.rstrip()
-                dump_lines( args.outputFile , line )
+                if( args.inputFormat == 'csv' ):
+                    dump_lines( args.outputFile , line )
+                elif( args.inputFormat == 'RxNorm' ):
+                    for outputInfix in [ 'Ingredients' , 'Brands' ]:
+                        dump_lines( '{}{}{}'.format( args.outputPrefix ,
+                                                     outputInfix ,
+                                                     args.outputSuffix ) ,
+                                    line )
     ##
     ##########################
-    if( args.inputFormat is 'csv' ):
-        parse_csv( args.inputFile , args.outputFile )
+    if( args.inputFormat == 'csv' ):
+        kb_stats = parse_csv( args.inputFile , args.outputFile )
+    elif( args.inputFormat == 'RxNorm' ):
+        kb_stats = parse_rxnorm( args.inputDir , 
+                                 args.outputPrefix , 
+                                 args.outputSuffix )
+    else:
+        log.error( 'Unrecognized input format:  {}'.format( args.inputFormat ) )
     ##
     ##########################
     if( args.suffixFile is not None ):
@@ -138,4 +177,7 @@ if __name__ == "__main__":
             for line in in_fp:
                 line = line.rstrip()
                 dump_lines( args.outputFile , line )
+    ##
+    ##########################
+    print( 'Unique Concepts:\t{}'.format( kb_stats[ 'total_concepts' ] ) )
 
