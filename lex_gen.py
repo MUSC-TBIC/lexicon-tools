@@ -3,6 +3,8 @@ import logging as log
 import os
 import sys
 
+import argparse
+
 import csv
 
 try:
@@ -37,6 +39,90 @@ import snomed_utils as snomed_u
 import spreadsheet_utils as csv_u
 import umls_utils as uu
 
+#############################################
+## 
+#############################################
+
+def initialize_arg_parser():
+    parser = argparse.ArgumentParser( description = """
+    """ )
+    parser.add_argument( '-v' , '--verbose' ,
+                         help = "print more information" ,
+                         action = "store_true" )
+    
+    parser.add_argument( '--input-dir' , default = 'in' ,
+                         dest = 'inputDir' ,
+                         help = 'Input directory containing supplementary files' )
+     
+    parser.add_argument( '--input-file' , required = True ,
+                         dest = 'inputFile' ,
+                         help = 'A pkl file if sourceType is \'pickle\' or an csv file specifying concepts to extract for all other sourceTypes' )
+     
+    parser.add_argument( '--source-type' , required = True ,
+                         dest = 'sourceType' ,
+                         choices = [ 'problems' , 'medications' , 'pickle' ] ,
+                         help = 'The concept type to focus extraction on. \'pickle\' loads concepts from the partial pickle files' )
+
+    parser.add_argument( '--batch-name' , required = True ,
+                         dest = 'batchName' ,
+                         help = 'Batch name or ID used to identify different runs of the same configuration files (e.g., batch001, batch123, testBatch)' )
+
+    parser.add_argument( '--partials-dir' , default = 'partials' ,
+                         dest = 'partialsDir' ,
+                         help = 'Directory used for writing partial and intermediary files' )
+
+    parser.add_argument( '--output-dir' , default = 'out' ,
+                         dest = 'outputDir' ,
+                         help = 'Output directory for writing file lexicons, dictionary, ontologies, and term lists' )
+    
+    ##
+    return parser
+
+def init_args( command_line_args ):
+    ##
+    parser = initialize_arg_parser()
+    args = parser.parse_args( command_line_args )
+    ##
+    bad_args_flag = False
+    ## Make sure inputs are all available
+    if( not os.path.exists( args.inputDir ) ):
+        log.error( 'The input directory does not exist:  {}'.format( args.inputDir ) )
+        bad_args_flag = True
+    if( not os.path.exists( args.inputFile ) ):
+        log.error( 'The input file does not exist:  {}'.format( args.inputFile ) )
+        bad_args_flag = True
+    ## Make sure we can access the output directory
+    if( not os.path.exists( args.outputDir ) ):
+        log.warning( 'Creating output folder:  {}'.format( args.outputDir ) )
+        try:
+            os.makedirs( args.outputDir )
+        except OSError as e:
+            bad_args_flag = True
+            log.error( 'OSError caught while trying to create output folder:  {}'.format( e ) )
+        except IOError as e:
+            bad_args_flag = True
+            log.error( 'IOError caught while trying to create output folder:  {}'.format( e ) )
+    if( args.partialsDir is not None and
+        not os.path.exists( args.partialsDir ) ):
+        log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( args.partialsDir ) )
+        try:
+            os.makedirs( args.partialsDir )
+        except OSError as e:
+            bad_args_flag = True
+            log.error( 'OSError caught while trying to create partials folder:  {}'.format( e ) )
+        except IOError as e:
+            bad_args_flag = True
+            log.error( 'IOError caught while trying to create partials folder:  {}'.format( e ) )
+    ##
+    if( bad_args_flag ):
+        log.error( "I'm bailing out of this run because of errors mentioned above." )
+        exit( 1 )
+    ##
+    return args
+
+#############################################
+## 
+#############################################
 
 def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = None ):
     """
@@ -234,16 +320,12 @@ def concepts_from_csv( csv_filename ):
             concepts[ cui ][ 'variant_terms' ].add( term )
     return( concepts )
 
+#############################################
+## 
+#############################################
 
 if __name__ == "__main__":
-    ## TODO - make these configurable via command line
-    input_dir = 'in'
-    partials_dir = 'partials'
-    output_dir = 'out'
-    # TODO - add real argparser
-    focus_type = sys.argv[ 1 ] ## focusedAllergen || focusedProblem
-    set_num = sys.argv[ 2 ] ## batch1 , batch2, etc.
-    focused_input_filename = sys.argv[ 3 ] ## Allergen_mappings.csv'
+    ##
     log.basicConfig()
     formatter = log.Formatter( '%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s' )
     ## TODO - make the date format easier to read
@@ -253,66 +335,52 @@ if __name__ == "__main__":
     log.debug( "Verbose output." )
     ## Turn logging for url lib to a higher level than default
     log.getLogger( 'urllib3.connectionpool' ).setLevel( log.INFO )
-    ## Make sure inputs are all available
-    if( not os.path.exists( input_dir ) ):
-        log.error( 'The input directory does not exist:  {}'.format( input_dir ) )
-        exit( 1 )
-    if( not os.path.exists( focused_input_filename ) ):
-        log.error( 'The input file does not exist:  {}'.format( focused_input_filename ) )
-        exit( 1 )
-    ## Make sure we can access the output directory
-    if( not os.path.exists( output_dir ) ):
-        log.warning( 'Creating output folder:  {}'.format( output_dir ) )
-        try:
-            os.makedirs( output_dir )
-        except OSError as e:
-            log.error( 'OSError caught while trying to create output folder:  {}'.format( e ) )
-        except IOError as e:
-            log.error( 'IOError caught while trying to create output folder:  {}'.format( e ) )
-    ## Compose full output filenames
-    dict_output_filename = os.path.join( output_dir ,
-                                         'conceptMapper_{}_{}.dict'.format( focus_type ,
-                                                                            set_num ) )
-    binary_csv_output_filename = os.path.join( output_dir ,
-                                               'binarydict_{}_{}.csv'.format( focus_type ,
-                                                                              set_num ) )
-    csv_output_filename = os.path.join( output_dir ,
-                                        '4waydict_{}_{}.csv'.format( focus_type ,
-                                                                     set_num ) )
-    wide_csv_output_filename = os.path.join( output_dir ,
-                                             'widedict_{}_{}.csv'.format( focus_type ,
-                                                                          set_num ) )
     ##
-    log.info( 'CSV In:\t{}'.format( focused_input_filename ) )
+    args = init_args( sys.argv[ 1: ] )
+    ## Compose full output filenames
+    dict_output_filename = os.path.join( args.outputDir ,
+                                         'conceptMapper_{}_{}.dict'.format( args.sourceType ,
+                                                                            args.batchName ) )
+    ttl_output_filename = os.path.join( args.outputDir ,
+                                        'kb_{}_{}.ttl'.format( args.sourceType ,
+                                                               args.batchName ) )
+    binary_csv_output_filename = os.path.join( args.outputDir ,
+                                               'binarydict_{}_{}.csv'.format( args.sourceType ,
+                                                                              args.batchName ) )
+    csv_output_filename = os.path.join( args.outputDir ,
+                                        '4waydict_{}_{}.csv'.format( args.sourceType ,
+                                                                     args.batchName ) )
+    wide_csv_output_filename = os.path.join( args.outputDir ,
+                                             'widedict_{}_{}.csv'.format( args.sourceType ,
+                                                                          args.batchName ) )
+    ##
+    log.info( 'CSV In:\t{}'.format( args.inputFile ) )
     log.info( 'ConceptMapper Out:\t{}'.format( dict_output_filename ) )
+    log.info( 'TTL Knowledgebase Out:\t{}'.format( ttl_output_filename ) )
     log.info( 'CSV Outs:\n\t{}\n\t{}\n\t{}'.format( binary_csv_output_filename ,
                                                     csv_output_filename ,
                                                     wide_csv_output_filename ) )
-    if( partials_dir is not None and
-        not os.path.exists( partials_dir ) ):
-        log.debug( 'Partials output directory does not exist.  Creating now:  {}'.format( partials_dir ) )
-        os.makedirs( partials_dir )
     ##
-    if( focus_type == 'focusedAllergen' ):
-        concepts = csv_u.parse_focused_allergens( focused_input_filename ,
-                                                  partials_dir = partials_dir )
-    elif( focus_type == 'focusedProblem' ):
+    if( args.sourceType == 'medications' ):
+        concepts = csv_u.parse_focused_allergens( args.inputFile ,
+                                                  partials_dir = args.partialsDir )
+    elif( args.sourceType == 'problems' ):
         ## TODO - write explanation for file contents.
         ## TODO - create function to generate a new version of this file
-        csv_input_filename = os.path.join( input_dir , '4colTsv_focused_problems_v2.csv' )
+        csv_input_filename = os.path.join( args.inputDir , '4colTsv_focused_problems_v2.csv' )
         if( os.path.exists( csv_input_filename ) ):
             csv_concepts = concepts_from_csv( csv_input_filename )
         else:
             csv_concepts = {}
-        cui_dict , concepts = csv_u.parse_focused_problems( focused_input_filename ,
+        #cui_dict , concepts = csv_u.parse_focused_problems( args.inputFile ,
+        #                                                    concepts = csv_concepts ,
+        #                                                    partials_dir = args.partialsDir )
+        cui_dict , concepts = csv_u.parse_problems( args.inputFile ,
                                                             concepts = csv_concepts ,
-                                                            partials_dir = partials_dir )
-    elif( focus_type == 'loadPickle' ):
-        with open( focused_input_filename , 'rb' ) as fp:
+                                                    partials_dir = args.partialsDir )
+    elif( args.sourceType == 'pickle' ):
+        with open( args.inputFile , 'rb' ) as fp:
             cui_dict , concepts = pickle.load( fp )
-    else:
-        log.error( 'Unknown or unrecognized \'focus_type\':  {}'.format( focus_type ) )
-        exit( 1 )
     ##
     concepts_to_concept_mapper( concepts , dict_output_filename )
     concepts_to_binary_csv( concepts , binary_csv_output_filename ,
