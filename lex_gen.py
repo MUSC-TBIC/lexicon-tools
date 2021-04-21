@@ -190,6 +190,88 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
                     encoding = 'UTF-8' ,
                     pretty_print = True )
 
+
+
+def concepts_to_ttl_kb_mapper( concepts ,
+                               ttl_output_filename ,
+                               prefix_file ,
+                               cui_list = None ):
+    """
+    Convert the `concepts` data structure to a TTL knowledgebase
+    """
+    node_map = { 'kbRoot' : 'http://www.ukp.informatik.tu-darmstadt.de/inception/1.0' ,
+                 'semtypeRoot' : 'https://uts.nlm.nih.gov/uts/umls/semantic-network/' , ##T059
+                 'utsRoot' : 'https://uts.nlm.nih.gov/uts/umls/concept/' ,
+                 'rxNormRoot' : 'https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=' ,
+                 'CUI' : 'nodex1' ,
+                 'SemType' : 'nodex2' ,
+                 'RXCUI' : 'nodex3' }
+    ##########################
+    if( prefix_file is not None ):
+        with open( prefix_file , 'r' ) as in_fp:
+            with open( ttl_output_filename , 'w' ) as out_fp:
+                for line in in_fp:
+                    line = line.rstrip()
+                    out_fp.write( '{}\n'.format( line ) )
+    if( cui_list is None ):
+        cui_list = sorted( concepts )
+    for cui in cui_list:
+        this_node = '{}{}'.format( node_map[ 'utsRoot' ] , cui )
+        node_map[ cui ] = this_node
+        ## Grab the TUI and set it as the parent unless we get a
+        ## better option later
+        if( 'tui' in concepts[ cui ] ):
+            tui = concepts[ cui ][ 'tui' ]
+            parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , tui )
+            if( tui not in node_map ):
+                node_map[ tui ] = parent_node
+                with open( ttl_output_filename , 'a' ) as out_fp:
+                    out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
+                    ## TODO - switch this to a pretty SemType name
+                    out_fp.write( '  :label "{}"@en;\n\n'.format( tui ) )
+        else:
+            tui = ''
+            parent_node = ''
+        ## The head CUI is a better parent than the TUI
+        if( 'head_cui' in concepts[ cui ] ):
+            head_cui = concepts[ cui ][ 'head_cui' ]
+            parent_node = '{}/{}'.format( node_map[ 'utsRoot' ] , head_cui )
+        ##
+        variant_terms = concepts[ cui ][ 'variant_terms' ]
+        ## If the preferred term isn't in the variants list, then make
+        ## sure to prepend it to the variants list
+        if( 'preferred_term' in concepts[ cui ] ):
+            preferred_term = concepts[ cui ][ 'preferred_term' ]
+            if( preferred_term not in variant_terms ):
+                variant_terms.insert( 0 , preferred_term )
+        else:
+            ## If we don't have a preferred term _or_ any variants,
+            ## then this is a bum entry
+            ## TODO - more error reporting
+            if( len( variant_terms ) <= 0 ):
+                continue
+        ## TODO - this is a simple hack so we don't have to do
+        ##        a check for SNOMEDCT entries in the next
+        ##        for loop.
+        if( 'SNOMEDCT' not in concepts[ cui ] ):
+            concepts[ cui ][ 'SNOMEDCT' ] = []
+        for cid in sorted( concepts[ cui ][ 'SNOMEDCT' ] ):
+            ###
+            fully_specified_name = concepts[ cui ][ 'SNOMEDCT' ][ cid ][ 'FSN' ]
+            if( fully_specified_name not in variant_terms ):
+                variant_terms.append( fully_specified_name )
+            #variant.set( 'snomedCid' , cid )
+        with open( ttl_output_filename , 'a' ) as out_fp:
+            out_fp.write( '<{}> a :Class;\n'.format( this_node ) )
+            out_fp.write( '  <{}#{}> "{}";\n'.format( node_map[ 'kbRoot' ] ,
+                                                      node_map[ 'CUI' ] ,
+                                                      cui ) )
+            for variant in variant_terms:
+                out_fp.write( '  :label "{}"@en;\n'.format( variant ) )
+            out_fp.write( '  :subClassOf <{}> .\n\n'.format( parent_node ) )
+        ##
+    
+
 def concepts_to_binary_csv( concepts , csv_filename ,
                             exclude_terms_flag = True ,
                             symmetric_flag = False ,
@@ -383,6 +465,8 @@ if __name__ == "__main__":
             cui_dict , concepts = pickle.load( fp )
     ##
     concepts_to_concept_mapper( concepts , dict_output_filename )
+    concepts_to_ttl_kb_mapper( concepts , ttl_output_filename ,
+                               prefix_file = 'kb_meta/problem_prefix.ttl' )
     concepts_to_binary_csv( concepts , binary_csv_output_filename ,
                             exclude_terms_flag = False )
     concepts_to_4col_csv( concepts , csv_output_filename )
