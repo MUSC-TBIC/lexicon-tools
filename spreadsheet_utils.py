@@ -42,15 +42,43 @@ def add_variant_term( auth_client , concepts , cui , variant , head = None ):
         concepts[ cui ][ 'variant_terms' ].add( variant )
     return( concepts )
 
-def flesh_out_concept( auth_client , concepts , cui , head = None ):
-    log.debug( 'Fleshing out {} ( total concepts = {}, head = {} )'.format( cui , len( concepts ) , head ) )
+
+def seed_concept( concepts , cui , head = None ):
+    log.debug( 'Seeding concept {} ( total concepts = {}, head = {} )'.format( cui , len( concepts ) , head ) )
     if( cui not in concepts ):
+        ## TODO - add a real empty dictionary here
+        concepts[ cui ] = {}
+        ##
+        if( head is not None ):
+            concepts[ cui ][ 'head_cui' ] = head
+            if( head not in concepts ):
+                log.warning( 'Missing head CUI:  {}'.format( head ) )
+            else:
+                if( 'related_cuis' not in concepts[ head ] ):
+                    concepts[ head ][ 'related_cuis' ] = set()
+                concepts[ head ][ 'related_cuis' ].add( cui )
+    ##
+    log.debug( 'New concept count = {}'.format( len( concepts ) ) )
+    return( concepts )
+
+
+def flesh_out_seed_concept( auth_client , concepts , cui ):
+    log.debug( 'Fleshing out {} ( total concepts = {} )'.format( cui , len( concepts ) ) )
+    if( cui not in concepts ):
+        log.warn( 'CUI \'{}\' was never seeded. Skipping'.format( cui ) )
+        return( concepts )
+    elif( 'preferred_term' not in concepts[ cui ] ):
+        ## Initializing this to empty tells us later that we've
+        ## already looked for this concept
+        concepts[ cui ][ 'preferred_term' ] = ''
+        concepts[ cui ][ 'tui' ] = ''
+        concepts[ cui ][ 'variant_terms' ] = set()
+        ##
         preferred_term = uu.get_cuis_preferred_atom( auth_client ,
                                                      'current' ,
                                                      cui )
         if( preferred_term is None ):
             return( concepts )
-        concepts[ cui ] = {}
         concepts[ cui ][ 'preferred_term' ] = preferred_term
         ## TODO - make this function call less surprising
         ## TODO - check if multiple TUIs are possible
@@ -64,16 +92,33 @@ def flesh_out_concept( auth_client , concepts , cui , head = None ):
         log.debug( '\tVariant Terms:  {}'.format( variant_terms ) )
         concepts[ cui ][ 'variant_terms' ] = variant_terms
         ##
-        if( head is not None ):
-            concepts[ cui ][ 'head_cui' ] = head
-            if( head not in concepts ):
-                log.warning( 'Missing head CUI:  {}'.format( head ) )
-            else:
-                if( 'related_cuis' not in concepts[ head ] ):
-                    concepts[ head ][ 'related_cuis' ] = set()
-                concepts[ head ][ 'related_cuis' ].add( cui )
+    return( concepts )
+
+
+def flesh_out_concept( auth_client , concepts , cui , head = None ):
+    log.debug( 'Fleshing out {} ( total concepts = {}, head = {} )'.format( cui , len( concepts ) , head ) )
+    if( cui not in concepts ):
+        log.warn( 'CUI \'{}\' was never seeded. Skipping'.format( cui ) )
+        return( concepts )
+    elif( 'preferred_term' not in concepts[ cui ] ):
+        preferred_term = uu.get_cuis_preferred_atom( auth_client ,
+                                                     'current' ,
+                                                     cui )
+        if( preferred_term is None ):
+            return( concepts )
+        concepts[ cui ][ 'preferred_term' ] = preferred_term
+        ## TODO - make this function call less surprising
+        ## TODO - check if multiple TUIs are possible
+        tui = uu.get_cuis_atom( auth_client , 'current' ,
+                                cui , atom_type = '' )
+        concepts[ cui ][ 'tui' ] = tui
+        ## TODO NEXT
+        #variant_terms = uu.get_cuis_eng_atom( auth_client ,
+        #                                      'current' ,
+        #                                      cui )
+        #log.debug( '\tVariant Terms:  {}'.format( variant_terms ) )
+        #concepts[ cui ][ 'variant_terms' ] = variant_terms
     ##
-    log.debug( 'New concept count = {}'.format( len( concepts ) ) )
     return( concepts )
 
 
@@ -724,7 +769,7 @@ def parse_focused_problems_tsv( input_filename ,
                             ## TODO - track snomed cid with this CUI for later dictionary entry
                             cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
             else:
-                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include SNOMED Parents Flag' ,
+                log.warning( 'Error:\t{}:\t\'{}\''.format( 'Unrecognized Include SNOMED Parents Flag' ,
                                                       include_snomed_parents_str ) )
             ########################            
             ##
@@ -740,7 +785,7 @@ def parse_focused_problems_tsv( input_filename ,
     return( cui_dict , concepts )
 
 
-def parse_focused_problems( input_filename ,
+def parse_problems( input_filename ,
                             concepts = {} ,
                             engine = 'api' ,
                             partials_dir = None ):
@@ -763,7 +808,7 @@ def parse_focused_problems( input_filename ,
     ##
     if( engine == 'api' and
         uu.UMLS_API_TOKEN is not None ):
-        cui_dict , concepts = parse_focused_problems_via_api( cui_dict ,
+        cui_dict , concepts = parse_problems_via_api( cui_dict ,
                                                               concepts ,
                                                               partials_dir = partials_dir )
     elif( engine == 'py-umls' and
@@ -773,6 +818,179 @@ def parse_focused_problems( input_filename ,
                                                                   partials_dir = partials_dir )
     return( cui_dict , concepts )
 
+
+def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None ):
+    #######################################################################
+    dict_keys = sorted( cui_dict.keys() )
+    standalone_queue = []
+    mth_queue = []
+    snomed_queue = []
+    for head_cui in tqdm( dict_keys , desc = 'Extracting Terms' ,
+                          file = sys.stdout ):
+        pickle_file = os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) )
+        if( partials_dir is not None and
+            os.path.exists( pickle_file ) ):
+            log.debug( 'Pickle file already exists for CUI {}. Loading and continuing to next.'.format( head_cui ) )
+            with open( pickle_file , 'rb' ) as fp:
+                cui_dict , concepts = pickle.load( fp )
+            continue
+        auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
+        if( 'preferred_term' not in concepts[ head_cui ] or
+            concepts[ head_cui ][ 'preferred_term' ] == '' ):
+            preferred_term = uu.get_cuis_preferred_atom( auth_client ,
+                                                         'current' ,
+                                                         head_cui )
+            concepts[ head_cui ][ 'preferred_term' ] = preferred_term
+        ##
+        if( 'tui' not in concepts[ head_cui ] or
+            concepts[ head_cui ][ 'tui' ] == '' ):
+            ## TODO - make this function call less surprising
+            ## TODO - check if multiple TUIs are possible
+            tui = uu.get_cuis_atom( auth_client , 'current' ,
+                                    head_cui , atom_type = '' )
+            concepts[ head_cui ][ 'tui' ] = tui
+        ##
+        if( 'variant_terms' not in concepts[ head_cui ] or
+            not bool( concepts[ head_cui ][ 'variant_terms' ] ) ):
+            variant_terms = uu.get_cuis_eng_atom( auth_client ,
+                                                  'current' ,
+                                                  head_cui )
+            log.debug( '\tVariant Terms:  {}'.format( variant_terms ) )
+            concepts[ head_cui ][ 'variant_terms' ] = variant_terms
+            ##
+        if( cui_dict[ head_cui ][ 'include_parents_flag' ] == True ):
+            if( cui_dict[ head_cui ][ 'parents_include_list' ] == [] ):
+                parent_cuis = uu.get_rns( auth_client , 'current' , head_cui )
+                for parent_cui in parent_cuis:
+                    cui_dict[ head_cui ][ 'parents_include_list' ].append( parent_cui )
+                    standalone_queue.append( parent_cui )
+                    concepts = seed_concept( concepts , parent_cui , head_cui )
+        log.debug( 'Done with parents' )
+        ##
+        if( cui_dict[ head_cui ][ 'include_ro_flag' ] == True ):
+            ro_cuis = uu.get_ros( auth_client , 'current' , head_cui )
+            for new_cui in ro_cuis:
+                if( new_cui in cui_dict[ head_cui ][ 'ro_exclude_list' ] ):
+                    continue
+                cui_dict[ head_cui ][ 'ro_include_list' ].append( new_cui )
+                standalone_queue.append( new_cui )
+                concepts = seed_concept( concepts , new_cui , head_cui )
+        log.debug( 'Done with ROs' )
+        ##
+        descendant_cuis = uu.get_rbs( auth_client , 'current' , head_cui )
+        log.debug( 'Grabbed RBs. descendant cui n = {}'.format( len( descendant_cuis ) ) )
+        exclude_list = cui_dict[ head_cui ][ 'descendants_exclude_list' ]
+        for descendant_cui in descendant_cuis:
+            if( descendant_cui in exclude_list or
+                descendant_cui in concepts ):
+                continue
+            concepts = seed_concept( concepts , descendant_cui , head_cui )
+            mth_queue.append( descendant_cui )
+        log.debug( 'Done with descendants' )
+        ##
+        for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_parent_list' ] , desc = 'Finding SNOMED Parents' ,
+                                leave = False ,
+                                file = sys.stdout ):
+            log.debug( '\tR:  {}'.format( ro_cui ) )
+            standalone_queue.append( snomed_cui )
+            concepts = seed_concept( concepts , snomed_cui , head_cui )
+        ##
+        for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_include_list' ] , desc = 'Finding SNOMED Concepts' ,
+                                leave = False ,
+                                file = sys.stdout ):
+            ## TODO NEXT - walk SNOMED in parallel to MTH
+            descendant_concept_ids = uu.get_family_tree( auth_client , 'current' ,
+                                                         snomed_cui ,
+                                                         relation_type = 'children' )
+            for descendant_concept_id in descendant_concept_ids:
+                descendant_cui = uu.get_cui( auth_client , 'current' ,
+                                             descendant_concept_id , 'SNOMEDCT_US' )
+                if( descendant_cui in exclude_list or
+                    descendant_cui in concepts ):
+                    continue
+                concepts = seed_concept( concepts , descendant_cui , head_cui )
+                mth_queue.append( descendant_cui )
+        log.debug( 'Done with SNOMED' )
+        ## At the end of every loop, we want to update our partial file
+        ## with the latest datastructures (in pickle form)
+        if( partials_dir is not None ):
+            with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
+                pickle.dump( [ cui_dict , concepts ] , fp )
+    ##
+    with open( '/tmp/cui_dict_gen000.json' , 'w' ) as fp:
+        fp.write( '{}'.format( cui_dict ) )
+    with open( '/tmp/concepts_gen000.json' , 'w' ) as fp:
+        fp.write( '{}'.format( concepts ) )
+    concepts = parse_problems_queue( auth_client ,
+                                     cui_dict ,
+                                     concepts,
+                                     partials_dir ,
+                                     standalone_queue ,
+                                     snomed_queue ,
+                                     distance = 1 ,
+                                     max_distance = 1 )
+    concepts = parse_problems_queue( auth_client ,
+                                     cui_dict ,
+                                     concepts,
+                                     partials_dir ,
+                                     mth_queue ,
+                                     snomed_queue ,
+                                     distance = 1 )
+    with open( '/tmp/cui_dict_genXYZ.json' , 'w' ) as fp:
+        fp.write( '{}'.format( cui_dict ) )
+    with open( '/tmp/concepts_genXYZ.json' , 'w' ) as fp:
+        fp.write( '{}'.format( concepts ) )
+    return( cui_dict , concepts )
+
+
+def parse_problems_queue( auth_client ,
+                          cui_dict ,
+                          concepts,
+                          partials_dir ,
+                          mth_queue ,
+                          snomed_queue ,
+                          distance = 1 ,
+                          max_distance = -1 ):
+    next_mth_queue = []
+    next_snomed_queue = []
+    for parent_cui in tqdm( sorted( mth_queue ) ,
+                            desc = 'Filling out concepts at distance of {} from seeds'.format( distance ) ,
+                            leave = True ,
+                            file = sys.stdout ):
+        concepts = flesh_out_seed_concept( auth_client , concepts , parent_cui )
+        if( max_distance == -1 or
+            distance < max_distance ):
+            ## get descendants and add to queue
+            descendant_cuis = uu.get_rbs( auth_client , 'current' , parent_cui )
+            log.debug( 'Grabbed RBs. descendant cui n = {}'.format( len( descendant_cuis ) ) )
+            head_cui = concepts[ parent_cui ][ 'head_cui' ]
+            exclude_list = cui_dict[ head_cui ][ 'descendants_exclude_list' ]
+            for descendant_cui in descendant_cuis:
+                if( descendant_cui in exclude_list or
+                    descendant_cui in concepts ):
+                    continue
+                concepts = seed_concept( concepts , descendant_cui , head_cui )
+                next_mth_queue.append( descendant_cui )
+        if( partials_dir is not None ):
+            with open( os.path.join( partials_dir ,
+                                     'processed_{}.pkl'.format( parent_cui ) ) ,
+                       'wb' ) as fp:
+                pickle.dump( [ cui_dict , concepts ] , fp )
+    with open( '/tmp/concepts_gen{:03d}.json'.format( distance ) , 'w' ) as fp:
+        fp.write( '{}'.format( concepts ) )
+    ## If either queue has some work left to do, then go another level
+    ## deeper.
+    if( len( next_mth_queue ) > 0 or
+        len( next_snomed_queue ) > 0 ):
+        concepts = parse_problems_queue( auth_client ,
+                                         cui_dict ,
+                                         concepts,
+                                         partials_dir ,
+                                         next_mth_queue ,
+                                         next_snomed_queue ,
+                                         distance = distance + 1 ,
+                                         max_distance = max_distance )
+    return( concepts )
 
 if __name__ == "__main__":
     input_filename = '/tmp/Book3.txt'
