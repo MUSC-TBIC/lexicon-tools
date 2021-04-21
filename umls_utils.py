@@ -43,6 +43,7 @@ def init_authentication( api_key ):
 def search_umls( auth_client , version , identifier , source ,
                  input_type = 'sourceUi' ,
                  return_type = 'concept' ):
+   log.debug( 'call to search_umls( ... , {} , ... )'.format( identifier ) )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/search/current?string="+str(identifier) + \
@@ -63,7 +64,7 @@ def search_umls( auth_client , version , identifier , source ,
    ############################
    classType = jsonData["classType"]
    if( len( jsonData["results"] ) > 1 ):
-      print( 'Warning:  multiple matches.  Only using the last for {}'.format( source ) )
+       log.debug( 'Multiple matches.  Only using the last for {}'.format( source ) )
    name = None
    cui = None
    for inner_results in jsonData["results"]:
@@ -75,12 +76,19 @@ def search_umls( auth_client , version , identifier , source ,
    return( cui )
 
 def get_cui( auth_client , version , identifier , source ):
+   log.debug( 'call to get_cui( ... , {} , ... )'.format( identifier ) )
    return( search_umls( auth_client , version , identifier , source ,
                         input_type = 'sourceUi' ,
                         return_type = 'concept' ) )
 
+def get_concept_id( auth_client , version , identifier , source ):
+   log.debug( 'call to get_concept_id( ... , {} , ... )'.format( identifier ) )
+   return( search_umls( auth_client , version , identifier , source ,
+                        input_type = 'concept' ,
+                        return_type = 'sourceUi' ) )
 
 def get_atoms( auth_client , version , identifier , source ):
+   log.debug( 'call to get_atoms( ... , {} , ... )'.format( identifier ) )
    current_page = 1
    last_page = 1
    tgt = auth_client.gettgt()
@@ -123,6 +131,7 @@ def get_atoms( auth_client , version , identifier , source ):
 
 def get_family_tree( auth_client , version , identifier ,
                      relation_type , root_source = 'SNOMEDCT_US' ):
+   log.debug( 'call to get_family_tree( ... , {} , ... )'.format( identifier ) )
    current_page = 1
    last_page = 1
    tgt = auth_client.gettgt()
@@ -171,6 +180,7 @@ def get_family_tree( auth_client , version , identifier ,
 
 def get_parents( auth_client , version , identifier , source ,
                  atoms = [] ):
+   log.debug( 'call to get_parents( ... , {} , ... )'.format( identifier ) )
    if( atoms == [] ):
       atoms = get_atoms( auth_client , version , identifier ,
                          source = source )
@@ -191,6 +201,7 @@ def get_parents( auth_client , version , identifier , source ,
 ########################################################################
 
 def get_cuis_atom( auth_client , version , identifier , atom_type ):
+   log.debug( 'call to get_cuis_atom( ... , {} , {} )'.format( identifier , atom_type ) )
    current_page = 1
    last_page = 1
    tgt = auth_client.gettgt()
@@ -217,6 +228,11 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
       except ValueError as e :
          current_page +=1
          continue
+      if( 'error' in items ):
+         log.error( 'Query failed due to reported error:  {}'.format( items[ 'error' ] ) )
+         break
+      if( 'result' not in items ):
+         continue
       jsonData = items["result"]
       ##uncomment the print statment if you want the raw json output, or you can just look at the documentation :=)
       #https://documentation.uts.nlm.nih.gov/rest/concept/index.html#sample-output
@@ -225,6 +241,8 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
       if( current_page == 1 ):
          last_page = items[ "pageCount" ]
          ##log( 'Page {} of {}'.format( current_page , last_page ) )
+      if( last_page > 1 ):
+         log.debug( 'Page {} of {}'.format( current_page , last_page ) )
       ##
       if( atom_type == '/preferred' ):
          name = jsonData[ "name" ]
@@ -252,6 +270,7 @@ def get_cuis_eng_atom( auth_client , version , identifier ):
    return( get_cuis_atom( auth_client , version , identifier , atom_type = '?language=ENG' ) )
 
 def get_typed_relation( auth_client , version , identifier , target_relation_type , target_relation_label ):
+   log.debug( 'call to get_typed_relation( ... , {} , {} , {} )'.format( identifier , target_relation_type , target_relation_label ) )
    current_page = 1
    last_page = 1
    tgt = auth_client.gettgt()
@@ -295,16 +314,19 @@ def get_typed_relation( auth_client , version , identifier , target_relation_typ
    return( cui_dict )
 
 def get_rbs( auth_client , version , identifier ):
+   log.debug( 'call to get_rbs( ... , {} )'.format( identifier ) )
    return( get_typed_relation( auth_client , version , identifier ,
                                target_relation_type = 'relations' ,
                                target_relation_label = 'RB' ) )
 
 def get_rns( auth_client , version , identifier ):
+   log.debug( 'call to get_rns( ... , {} )'.format( identifier ) )
    return( get_typed_relation( auth_client , version , identifier ,
                                target_relation_type = 'relations' ,
                                target_relation_label = 'RN' ) )
 
 def get_ros( auth_client , version , identifier ):
+   log.debug( 'call to get_ros( ... , {} )'.format( identifier ) )
    return( get_typed_relation( auth_client , version , identifier ,
                                target_relation_type = 'relations' ,
                                target_relation_label = 'RO' ) )

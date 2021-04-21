@@ -237,7 +237,7 @@ def concepts_to_ttl_kb_mapper( concepts ,
             head_cui = concepts[ cui ][ 'head_cui' ]
             parent_node = '{}/{}'.format( node_map[ 'utsRoot' ] , head_cui )
         ##
-        variant_terms = concepts[ cui ][ 'variant_terms' ]
+        variant_terms = sorted( list( concepts[ cui ][ 'variant_terms' ] ) )
         ## If the preferred term isn't in the variants list, then make
         ## sure to prepend it to the variants list
         if( 'preferred_term' in concepts[ cui ] ):
