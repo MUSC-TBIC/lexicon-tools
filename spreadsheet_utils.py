@@ -713,7 +713,8 @@ def parse_focused_problems_tsv( input_filename ,
             ## Include UMLS RO (related other)
             ## Include SNOMED Concepts -> CUIs
             ## Include SNOMED Parents (ISA)
-            if( include_umls_parents_str.lower() == 'no' ):
+            if( include_umls_parents_str.lower() == 'no' or
+                include_umls_parents_str.lower() == '' ):
                 cui_dict[ head_cui ][ 'include_parents_flag' ] = False
             elif( include_umls_parents_str.lower() == 'yes' ):
                 cui_dict[ head_cui ][ 'include_parents_flag' ] = True
@@ -737,7 +738,8 @@ def parse_focused_problems_tsv( input_filename ,
                         this_cui = this_cui.lstrip( ' ' )
                         this_cui = this_cui.strip( '"' )
                         cui_dict[ head_cui ][ 'ro_exclude_list' ].append( this_cui )
-            elif( include_ro_str.lower() == 'no' ):
+            elif( include_ro_str.lower() == 'no' or
+                  include_ro_str.lower() == '' ):
                 cui_dict[ head_cui ][ 'include_ro_flag' ] = False
             else:
                 log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include RO Flag' ,
