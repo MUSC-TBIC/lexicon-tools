@@ -236,8 +236,8 @@ def parse_focused_allergens( input_filename , concepts = {} , partials_dir = Non
             head_cui = cols[ 1 ]
             ## Include parents (all RN)?
             include_umls_parents_str = cols[ 2 ]
-            ## Parents (or RO) to include (if some)
-            parents_str = None ## cols[ 3 ] set later if not None
+            ## set later if not None
+            parents_str = None ## cols[ 3 / 'Parents (or RO) to include (if some)' ] 
             ## Include RO?
             include_ro_str = cols[ 4 ]
             ## Include children or children
@@ -669,31 +669,31 @@ def parse_focused_problems_tsv( input_filename ,
     cui_dict = {}
     ##
     with open( input_filename , 'r' ) as in_fp:
-        in_tsv = csv.reader( in_fp , dialect=csv.excel_tab )
-        ## Skip the header
-        headers = next( in_tsv , None )
+        in_tsv = csv.DictReader( in_fp , dialect = 'excel-tab' )
         for cols in in_tsv:
-            alt_name = cols[ 0 ]
+            ## The first column can be named freely so we need to grab
+            ## the contents based on position rather than using the
+            ## dictionary key
+            alt_name = next( iter( cols ) )
             if( len( alt_name ) == 0 ):
                 continue
             ## UMLS concepts
-            head_cui = cols[ 1 ]
-            include_umls_parents_str = cols[ 2 ]
-            parents_str = None ## cols[ 3 ] set later if not None
-            include_ro_str = cols[ 4 ]
-            ro_str = None ## cols[ 5 ] set later if not none
+            head_cui = cols[ 'CUI' ]
+            include_umls_parents_str = cols[ 'Include parents (all RN)?' ]
+            ## set later if not None
+            parents_str = None ## cols[ 3 / 'Parents (or RO) to include (if some)' ]
+            include_ro_str = cols[ 'Include RO?' ]
+            ## set later if not none
+            ro_str = None ## cols[ 5 / 'RO to exclude' ]
             ## SNOMED concepts 
-            snomed_concepts_str = cols[ 6 ] ## SNOMED-CT conceptsIDs
-            include_snomed_parents_str = cols[ 7 ] ## Include parents (SNOMED ancestors)?
-            ancestors_str = cols[ 8 ] ## Ancestors to include (if some)
-            descendants_exclude_str = cols[ 9 ] ## Children to be excluded
-            #vocabulary = 'SNOMEDCT_US'
-            #cui , alt_name = get_cui( auth_client , 'current' , c_code , vocabulary ).split( '\t' )
+            snomed_concepts_str = cols[ 'SNOMED-CT conceptsIDs' ]
+            include_snomed_parents_str = cols[ 'Include parents (SNOMED ancestors)?' ]
+            ancestors_str = cols[ 'Ancestors to include (if some)' ]
+            descendants_exclude_str = cols[ 'Children to be excluded' ]
             ##
             log.debug( 'Old CUI:\t{}'.format( head_cui ) )
             cui_dict[ head_cui ] = {}
-            if( head_cui not in concepts ):
-                concepts[ head_cui ] = {}
+            concepts = seed_concept( concepts , cui = head_cui , head = None )
             cui_dict[ head_cui ][ 'include_parents_flag' ] = None
             cui_dict[ head_cui ][ 'parents_include_list' ] = []
             cui_dict[ head_cui ][ 'descendants_include_list' ] = []
@@ -719,7 +719,7 @@ def parse_focused_problems_tsv( input_filename ,
                 cui_dict[ head_cui ][ 'include_parents_flag' ] = True
             elif( include_umls_parents_str.lower() == 'some' ):
                 cui_dict[ head_cui ][ 'include_parents_flag' ] = True
-                parents_str = cols[ 3 ]
+                parents_str = cols[ 'Parents (or RO) to include (if some)' ]
                 for this_cui in parents_str.split( ',' ):
                     this_cui = this_cui.strip( )
                     this_cui = this_cui.strip( '"' )
@@ -731,7 +731,7 @@ def parse_focused_problems_tsv( input_filename ,
             # ##
             if( include_ro_str.lower() == 'yes' ):
                 cui_dict[ head_cui ][ 'include_ro_flag' ] = True
-                ro_str = cols[ 5 ]
+                ro_str = cols[ 'RO to exclude' ]
                 if( ro_str != '' ):
                     for this_cui in ro_str.split( ',' ):
                         this_cui = this_cui.lstrip( ' ' )
