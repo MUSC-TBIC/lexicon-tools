@@ -63,6 +63,10 @@ def initialize_arg_parser():
                          choices = [ 'problems' , 'medications' , 'pickle' ] ,
                          help = 'The concept type to focus extraction on. \'pickle\' loads concepts from the partial pickle files' )
 
+    parser.add_argument( '--max-distance' , default = -1 ,
+                         dest = 'maxDistance' ,
+                         help = 'The maximum depth or distance beyond the seed concepts to extract (-1 means to extract all descendants, 0 means no descedants/parents/ROs, 2 means parents/ROs and up to grandchildren, etc.)' )
+
     parser.add_argument( '--batch-name' , required = True ,
                          dest = 'batchName' ,
                          help = 'Batch name or ID used to identify different runs of the same configuration files (e.g., batch001, batch123, testBatch)' )
@@ -74,7 +78,11 @@ def initialize_arg_parser():
     parser.add_argument( '--output-dir' , default = 'out' ,
                          dest = 'outputDir' ,
                          help = 'Output directory for writing file lexicons, dictionary, ontologies, and term lists' )
-    
+
+    parser.add_argument( '--prefix-file' , default = None ,
+                         dest = 'prefixFile' ,
+                         help = 'File contents to insert before any other output (Used for TTL output)' )
+
     ##
     return parser
 
@@ -91,6 +99,12 @@ def init_args( command_line_args ):
     if( not os.path.exists( args.inputFile ) ):
         log.error( 'The input file does not exist:  {}'.format( args.inputFile ) )
         bad_args_flag = True
+    ## Make sure maxDistance is an integer value
+    try:
+        args.maxDistance = int( args.maxDistance )
+    except Exception as e:
+        bad_args_flag = True
+        log.error( 'Exception thrown while trying to convert --max-distance value ({}) to an int:  {}'.format( args.maxDistance , e ) )
     ## Make sure we can access the output directory
     if( not os.path.exists( args.outputDir ) ):
         log.warning( 'Creating output folder:  {}'.format( args.outputDir ) )
@@ -377,6 +391,7 @@ def concepts_to_wide_csv( concepts , csv_filename ,
     for head_cui in wide_list:
         if( head_cui is None ):
             continue
+        print( 'Head CUI:  {}'.format( head_cui ) )
         with open( csv_filename , 'a' ) as fp:
             fp.write( '{}'.format( head_cui ) )
             for related_cui_or_term in wide_list[ head_cui ]:
@@ -458,15 +473,16 @@ if __name__ == "__main__":
         #                                                    concepts = csv_concepts ,
         #                                                    partials_dir = args.partialsDir )
         cui_dict , concepts = csv_u.parse_problems( args.inputFile ,
-                                                            concepts = csv_concepts ,
-                                                    partials_dir = args.partialsDir )
+                                                    concepts = csv_concepts ,
+                                                    partials_dir = args.partialsDir ,
+                                                    max_distance = args.maxDistance )
     elif( args.sourceType == 'pickle' ):
         with open( args.inputFile , 'rb' ) as fp:
             cui_dict , concepts = pickle.load( fp )
     ##
     concepts_to_concept_mapper( concepts , dict_output_filename )
     concepts_to_ttl_kb_mapper( concepts , ttl_output_filename ,
-                               prefix_file = 'kb_meta/problem_prefix.ttl' )
+                               prefix_file = args.prefixFile )
     concepts_to_binary_csv( concepts , binary_csv_output_filename ,
                             exclude_terms_flag = False )
     concepts_to_4col_csv( concepts , csv_output_filename )

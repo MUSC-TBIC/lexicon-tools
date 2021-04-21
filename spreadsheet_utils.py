@@ -788,7 +788,8 @@ def parse_focused_problems_tsv( input_filename ,
 def parse_problems( input_filename ,
                             concepts = {} ,
                             engine = 'api' ,
-                            partials_dir = None ):
+                    partials_dir = None ,
+                    max_distance = -1 ):
     ## If no patials directory was provided, then initialized these
     ## datastructures as empty
     if( partials_dir is not None and
@@ -810,7 +811,8 @@ def parse_problems( input_filename ,
         uu.UMLS_API_TOKEN is not None ):
         cui_dict , concepts = parse_problems_via_api( cui_dict ,
                                                               concepts ,
-                                                              partials_dir = partials_dir )
+                                                      partials_dir = partials_dir ,
+                                                      max_distance = max_distance )
     elif( engine == 'py-umls' and
           umls_lu is not None ):
         cui_dict , concepts = parse_focused_problems_via_py_umls( input_filename ,
@@ -819,7 +821,7 @@ def parse_problems( input_filename ,
     return( cui_dict , concepts )
 
 
-def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None ):
+def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max_distance = -1 ):
     #######################################################################
     dict_keys = sorted( cui_dict.keys() )
     standalone_queue = []
@@ -928,14 +930,15 @@ def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None ):
                                      standalone_queue ,
                                      snomed_queue ,
                                      distance = 1 ,
-                                     max_distance = 1 )
+                                     max_distance = max_distance )
     concepts = parse_problems_queue( auth_client ,
                                      cui_dict ,
                                      concepts,
                                      partials_dir ,
                                      mth_queue ,
                                      snomed_queue ,
-                                     distance = 1 )
+                                     distance = 1 ,
+                                     max_distance = max_distance )
     with open( '/tmp/cui_dict_genXYZ.json' , 'w' ) as fp:
         fp.write( '{}'.format( cui_dict ) )
     with open( '/tmp/concepts_genXYZ.json' , 'w' ) as fp:
