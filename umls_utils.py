@@ -9,8 +9,7 @@ import argparse
 import time
 
 ## TODO - allow this to be passed via command line or environment variable
-## UMLS_API_TOKEN = 'NOT-A-REAL-TOKEN-ASDF-QWERTY'
-UMLS_API_TOKEN = None
+UMLS_API_TOKEN = 'NOT-A-REAL-TOKEN-ASDF-QWERTY'
 
 last_auth_time = None
 last_auth_client = None
@@ -137,7 +136,7 @@ def get_family_tree( auth_client , version , identifier ,
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/content/current/source/" + str( root_source ) + "/"+str(identifier) + "/" + str( relation_type )
-   ##log( '{}'.format( content_endpoint )
+   ##print( '{}'.format( content_endpoint ) )
    atoms_set = set()
    ############################
    while( current_page <= last_page ):
@@ -146,7 +145,7 @@ def get_family_tree( auth_client , version , identifier ,
       query = { 'ticket' : auth_client.getst(tgt) , 'pageNumber' : current_page }
       r = requests.get(uri+content_endpoint,params=query)
       r.encoding = 'utf-8'
-      ##log( r.text )
+      ##print( r.text )
       try:
          items  = json.loads(r.text)
       except ValueError as e :
@@ -222,7 +221,7 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
       query = { 'ticket' : auth_client.getst(tgt) , 'pageNumber' : current_page }
       r = requests.get(uri+content_endpoint,params=query)
       r.encoding = 'utf-8'
-      ##log( r.test )
+      ##log( r.text )
       try:
          items  = json.loads(r.text)
       except ValueError as e :
@@ -240,7 +239,6 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
       ##log( json.dumps(items, indent = 4) )
       if( current_page == 1 ):
          last_page = items[ "pageCount" ]
-         ##log( 'Page {} of {}'.format( current_page , last_page ) )
       if( last_page > 1 ):
          log.debug( 'Page {} of {}'.format( current_page , last_page ) )
       ##
@@ -249,15 +247,15 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
          ##log( '{}\t{}'.format( str( identifier ) , name ) )
          return( name )
       elif( atom_type == '' ):
-          semantic_types = jsonData[ 'semanticTypes' ]
-          for sem_type in semantic_types:
-              tui = sem_type[ 'uri' ].split( '/' )[ -1 ]
-              return( tui )
+         semantic_types = jsonData[ 'semanticTypes' ]
+         for sem_type in semantic_types:
+            tui = sem_type[ 'uri' ].split( '/' )[ -1 ]
+            return( tui )
       else:
-          for inner_results in jsonData:
-              name = inner_results[ "name" ]
-              all_atoms.add( name )
-              ##log( '{}\t{}'.format( identifier , name ) )
+         for inner_results in jsonData:
+            name = inner_results[ "name" ]
+            all_atoms.add( name )
+            ##log( '{}\t{}'.format( identifier , name ) )
       current_page +=1
    return( all_atoms )
 
@@ -291,7 +289,12 @@ def get_typed_relation( auth_client , version , identifier , target_relation_typ
       except ValueError as e :
          current_page +=1
          continue
-      jsonData = items["result"]
+      if( 'error' in items ):
+         log.error( 'Query failed due to reported error:  {}'.format( items[ 'error' ] ) )
+         break
+      if( 'result' not in items ):
+         continue
+      jsonData = items[ "result" ]
       ##uncomment the print statment if you want the raw json output, or you can just look at the documentation :=)
       #https://documentation.uts.nlm.nih.gov/rest/concept/index.html#sample-output
       #https://documentation.uts.nlm.nih.gov/rest/source-asserted-identifiers/index.html#sample-output
@@ -356,18 +359,18 @@ def get_all_umls_descendants( auth_client , head_cui ,
 
 def get_all_snomed_descendants( auth_client , head_concept_id ,
                                 exclude_list ):
-    descendant_concept_ids = get_family_tree( auth_client , 'current' ,
-                                              head_concept_id ,
-                                              relation_type = 'children' )
+      descendant_concept_ids = get_family_tree( auth_client , 'current' ,
+                                                head_concept_id ,
+                                                relation_type = 'children' )
     include_list = []
-    for descendant_concept_id in descendant_concept_ids:
-        descendant_cui = get_cui( auth_client , 'current' , descendant_concept_id , 'SNOMEDCT_US' )
-        if( descendant_cui in exclude_list ):
+      for descendant_concept_id in descendant_concept_ids:
+         descendant_cui = get_cui( auth_client , 'current' , descendant_concept_id , 'SNOMEDCT_US' )
+         if( descendant_cui in exclude_list ):
             continue
-        include_list.append( descendant_cui )
-        include_list += get_all_snomed_descendants( auth_client , descendant_concept_id ,
-                                                    exclude_list )
-    return include_list
+         include_list.append( descendant_cui )
+         include_list += get_all_snomed_descendants( auth_client , descendant_concept_id ,
+                                                     exclude_list )
+   return include_list
 
 ########################################################################
 ##
@@ -451,6 +454,15 @@ def get_rxclass_members( rxclass_str ):
 if __name__ == "__main__":
       auth_client = init_authentication( UMLS_API_TOKEN )
       ##log( '{}'.format( get_cuis_preferred_atom( auth_client , 'current' , 'C0000731' ) ) )
-      print( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0000731' , '' ) ) )
+      #print( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0553968' , '' ) ) )
+      #print( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0553968' , '/preferred' ) ) )
+      ##print( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0553968' , '?language=ENG' ) ) )
+      print( '{}'.format( get_typed_relation( auth_client , 'current' , 'C0232491' , 'relations' , 'RB' ) ) )
+      #print( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0019699' , '' ) ) )
+      #print( '{}'.format( get_concept_id( auth_client , 'current' , 'C0019699' , 'SNOMEDCT_US' ) ) )
+      #print( '{}'.format( get_concept_id( auth_client , 'current' , '165816005' , 'SNOMEDCT_US' ) ) )
+      ##print( '{}'.format( get_cui( auth_client , 'current' , 'C0019699' , '' ) ) )
+      #print( '{}'.format( get_family_tree( auth_client , 'current' , '165816005' , 'parents' ) ) )
+      ##print( '{}'.format( get_family_tree( auth_client , 'current' , '165816005' , 'CHD' ) ) )
       ##log( '{}'.format( get_cuis_atom( auth_client , 'current' , 'C0000731' ,
       ##                                   atom_type = '?language=ENG' ) ) )
