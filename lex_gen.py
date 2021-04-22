@@ -151,6 +151,8 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
         variant_terms = concepts[ cui ][ 'variant_terms' ]
         if( 'preferred_term' in concepts[ cui ] ):
             preferred_term = concepts[ cui ][ 'preferred_term' ]
+            if( preferred_term is None ):
+                continue
         else:
             preferred_term = ''
             if( len( variant_terms ) > 0 ):
@@ -159,7 +161,11 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
                 continue
         if( 'tui' in concepts[ cui ] ):
             tui = concepts[ cui ][ 'tui' ]
+            try:
             token.set( 'umlsTui' , tui )
+            except TypeError as e:
+                log.error( 'Concept {} has unexpected TUI type:  {}'.format( cui , tui ) )
+                token.set( 'umlsTui' , '{}'.format( tui ) )
         else:
             tui = ''
         token.set( 'canonical' , preferred_term )
@@ -236,6 +242,16 @@ def concepts_to_ttl_kb_mapper( concepts ,
         ## better option later
         if( 'tui' in concepts[ cui ] ):
             tui = concepts[ cui ][ 'tui' ]
+            if( type( tui ) is set ):
+                for this_tui in tui:
+                    parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , this_tui )
+                    if( this_tui not in node_map ):
+                        node_map[ this_tui ] = parent_node
+                        with open( ttl_output_filename , 'a' ) as out_fp:
+                            out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
+                            ## TODO - switch this to a pretty SemType name
+                            out_fp.write( '  :label "{}"@en;\n\n'.format( this_tui ) )
+            else:
             parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , tui )
             if( tui not in node_map ):
                 node_map[ tui ] = parent_node
