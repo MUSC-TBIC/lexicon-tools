@@ -42,7 +42,10 @@ def init_authentication( api_key ):
 def search_umls( auth_client , version , identifier , source ,
                  input_type = 'sourceUi' ,
                  return_type = 'concept' ):
-   log.debug( 'call to search_umls( ... , {} , ... )'.format( identifier ) )
+   log.debug( 'call to search_umls( ... , {} , {} , {} , {} )'.format( identifier ,
+                                                                       source ,
+                                                                       input_type ,
+                                                                       return_type ) )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/search/current?string="+str(identifier) + \
@@ -55,6 +58,11 @@ def search_umls( auth_client , version , identifier , source ,
    r = requests.get(uri+content_endpoint,params=query)
    r.encoding = 'utf-8'
    items  = json.loads(r.text)
+   if( 'error' in items ):
+      log.error( 'Query failed due to reported error:  {}'.format( items[ 'error' ] ) )
+      return None
+   if( 'result' not in items ):
+      return None
    jsonData = items["result"]
    ##uncomment the print statment if you want the raw json output, or you can just look at the documentation :=)
    #https://documentation.uts.nlm.nih.gov/rest/concept/index.html#sample-output
@@ -110,6 +118,11 @@ def get_atoms( auth_client , version , identifier , source ):
       except ValueError as e :
          current_page +=1
          continue
+      if( 'error' in items ):
+         log.error( 'Query failed due to reported error:  {}'.format( items[ 'error' ] ) )
+         break
+      if( 'result' not in items ):
+         continue
       jsonData = items["result"]
       ##uncomment the print statment if you want the raw json output, or you can just look at the documentation :=)
       #https://documentation.uts.nlm.nih.gov/rest/concept/index.html#sample-output
@@ -150,6 +163,11 @@ def get_family_tree( auth_client , version , identifier ,
          items  = json.loads(r.text)
       except ValueError as e :
          current_page +=1
+         continue
+      if( 'error' in items ):
+         log.error( 'Query failed due to reported error:  {}'.format( items[ 'error' ] ) )
+         break
+      if( 'result' not in items ):
          continue
       jsonData = items["result"]
       if( jsonData is None ):

@@ -663,7 +663,8 @@ def parse_focused_problems_via_py_umls( input_filename , concepts , partials_dir
 
 
 def parse_focused_problems_tsv( input_filename ,
-                                concepts = {} ):
+                                concepts = {} ,
+                                max_distance = -1 ):
     ##
     auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
     cui_dict = {}
@@ -713,7 +714,8 @@ def parse_focused_problems_tsv( input_filename ,
             ## Include UMLS RO (related other)
             ## Include SNOMED Concepts -> CUIs
             ## Include SNOMED Parents (ISA)
-            if( include_umls_parents_str.lower() == 'no' or
+            if( max_distance == 0 or
+                include_umls_parents_str.lower() == 'no' or
                 include_umls_parents_str.lower() == '' ):
                 cui_dict[ head_cui ][ 'include_parents_flag' ] = False
             elif( include_umls_parents_str.lower() == 'yes' ):
@@ -730,7 +732,11 @@ def parse_focused_problems_tsv( input_filename ,
                 log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include Parents Flag' ,
                                                         include_umls_parents_str ) )
             # ##
-            if( include_ro_str.lower() == 'yes' ):
+            if( max_distance == 0 or
+                include_ro_str.lower() == 'no' or
+                include_ro_str.lower() == '' ):
+                cui_dict[ head_cui ][ 'include_ro_flag' ] = False
+            elif( include_ro_str.lower() == 'yes' ):
                 cui_dict[ head_cui ][ 'include_ro_flag' ] = True
                 ro_str = cols[ 'RO to exclude' ]
                 if( ro_str != '' ):
@@ -738,16 +744,14 @@ def parse_focused_problems_tsv( input_filename ,
                         this_cui = this_cui.lstrip( ' ' )
                         this_cui = this_cui.strip( '"' )
                         cui_dict[ head_cui ][ 'ro_exclude_list' ].append( this_cui )
-            elif( include_ro_str.lower() == 'no' or
-                  include_ro_str.lower() == '' ):
-                cui_dict[ head_cui ][ 'include_ro_flag' ] = False
             else:
                 log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include RO Flag' ,
                                                      include_ro_str ) )
             #####
             snomed_parent_cuis = set()
             cui_dict[ head_cui ][ 'snomed_parent_list' ] = []
-            if( include_snomed_parents_str.lower() == 'no' ):
+            if( max_distance == 0 or
+                include_snomed_parents_str.lower() == 'no' ):
                 cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = False
             elif( include_snomed_parents_str.lower() == 'some' ):
                 cui_dict[ head_cui ][ 'include_snomed_parents_flag' ] = True
@@ -801,7 +805,8 @@ def parse_problems( input_filename ,
             cui_dict , concepts = pickle.load( fp )
     else:
         cui_dict , concepts = parse_focused_problems_tsv( input_filename = input_filename ,
-                                                          concepts = concepts )
+                                                          concepts = concepts ,
+                                                          max_distance = max_distance )
         ## After we're done processing the tsv, we want to update our partial file
         ## with the latest datastructures (in pickle form)
         if( partials_dir is not None ):
@@ -823,7 +828,10 @@ def parse_problems( input_filename ,
     return( cui_dict , concepts )
 
 
-def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max_distance = -1 ):
+def parse_problems_via_api( cui_dict ,
+                            concepts = {} ,
+                            partials_dir = None ,
+                            max_distance = -1 ):
     #######################################################################
     dict_keys = sorted( cui_dict.keys() )
     standalone_queue = []
@@ -881,10 +889,14 @@ def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max
                 concepts = seed_concept( concepts , new_cui , head_cui )
         log.debug( 'Done with ROs' )
         ##
+        exclude_list = cui_dict[ head_cui ][ 'descendants_exclude_list' ]
+        if( max_distance != 0 ):
         descendant_cuis = uu.get_rbs( auth_client , 'current' , head_cui )
         log.debug( 'Grabbed RBs. descendant cui n = {}'.format( len( descendant_cuis ) ) )
-        exclude_list = cui_dict[ head_cui ][ 'descendants_exclude_list' ]
-        for descendant_cui in descendant_cuis:
+            for descendant_cui in tqdm( descendant_cuis ,
+                                        desc = 'Seeding descendants' ,
+                                        leave = False ,
+                                        file = sys.stdout ):
             if( descendant_cui in exclude_list or
                 descendant_cui in concepts ):
                 continue
@@ -892,21 +904,27 @@ def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max
             mth_queue.append( descendant_cui )
         log.debug( 'Done with descendants' )
         ##
-        for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_parent_list' ] , desc = 'Finding SNOMED Parents' ,
+        for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_parent_list' ] ,
+                                desc = 'Finding SNOMED Parents' ,
                                 leave = False ,
                                 file = sys.stdout ):
             log.debug( '\tR:  {}'.format( ro_cui ) )
             standalone_queue.append( snomed_cui )
             concepts = seed_concept( concepts , snomed_cui , head_cui )
         ##
-        for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_include_list' ] , desc = 'Finding SNOMED Concepts' ,
+        if( max_distance != 0 ):
+            for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_include_list' ] ,
+                                    desc = 'Finding SNOMED Concepts' ,
                                 leave = False ,
                                 file = sys.stdout ):
             ## TODO NEXT - walk SNOMED in parallel to MTH
             descendant_concept_ids = uu.get_family_tree( auth_client , 'current' ,
                                                          snomed_cui ,
                                                          relation_type = 'children' )
-            for descendant_concept_id in descendant_concept_ids:
+                for descendant_concept_id in tqdm( descendant_concept_ids ,
+                                                   desc = 'Seeding SNOMED descendant concepts' ,
+                                                   leave = False ,
+                                                   file = sys.stdout ):
                 descendant_cui = uu.get_cui( auth_client , 'current' ,
                                              descendant_concept_id , 'SNOMEDCT_US' )
                 if( descendant_cui in exclude_list or
@@ -921,10 +939,6 @@ def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max
             with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
                 pickle.dump( [ cui_dict , concepts ] , fp )
     ##
-    with open( '/tmp/cui_dict_gen000.json' , 'w' ) as fp:
-        fp.write( '{}'.format( cui_dict ) )
-    with open( '/tmp/concepts_gen000.json' , 'w' ) as fp:
-        fp.write( '{}'.format( concepts ) )
     concepts = parse_problems_queue( auth_client ,
                                      cui_dict ,
                                      concepts,
@@ -941,10 +955,6 @@ def parse_problems_via_api( cui_dict , concepts = {} , partials_dir = None , max
                                      snomed_queue ,
                                      distance = 1 ,
                                      max_distance = max_distance )
-    with open( '/tmp/cui_dict_genXYZ.json' , 'w' ) as fp:
-        fp.write( '{}'.format( cui_dict ) )
-    with open( '/tmp/concepts_genXYZ.json' , 'w' ) as fp:
-        fp.write( '{}'.format( concepts ) )
     return( cui_dict , concepts )
 
 
