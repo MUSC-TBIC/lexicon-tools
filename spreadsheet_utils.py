@@ -939,16 +939,14 @@ def parse_problems_via_api( cui_dict ,
             with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
                 pickle.dump( [ cui_dict , concepts ] , fp )
     ##
-    concepts = parse_problems_queue( auth_client ,
-                                     cui_dict ,
+    concepts = parse_problems_queue( cui_dict ,
                                      concepts,
                                      partials_dir ,
                                      standalone_queue ,
                                      snomed_queue ,
                                      distance = 1 ,
                                      max_distance = max_distance )
-    concepts = parse_problems_queue( auth_client ,
-                                     cui_dict ,
+    concepts = parse_problems_queue( cui_dict ,
                                      concepts,
                                      partials_dir ,
                                      mth_queue ,
@@ -958,14 +956,16 @@ def parse_problems_via_api( cui_dict ,
     return( cui_dict , concepts )
 
 
-def parse_problems_queue( auth_client ,
-                          cui_dict ,
+def parse_problems_queue( cui_dict ,
                           concepts,
                           partials_dir ,
                           mth_queue ,
                           snomed_queue ,
                           distance = 1 ,
                           max_distance = -1 ):
+    ## Re-up the authentication token for every new depth
+    auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
+    ## Placeholders for any next-round processing we'll need to do
     next_mth_queue = []
     next_snomed_queue = []
     for parent_cui in tqdm( sorted( mth_queue ) ,
@@ -991,14 +991,11 @@ def parse_problems_queue( auth_client ,
                                      'processed_{}.pkl'.format( parent_cui ) ) ,
                        'wb' ) as fp:
                 pickle.dump( [ cui_dict , concepts ] , fp )
-    with open( '/tmp/concepts_gen{:03d}.json'.format( distance ) , 'w' ) as fp:
-        fp.write( '{}'.format( concepts ) )
     ## If either queue has some work left to do, then go another level
     ## deeper.
     if( len( next_mth_queue ) > 0 or
         len( next_snomed_queue ) > 0 ):
-        concepts = parse_problems_queue( auth_client ,
-                                         cui_dict ,
+        concepts = parse_problems_queue( cui_dict ,
                                          concepts,
                                          partials_dir ,
                                          next_mth_queue ,
