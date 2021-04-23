@@ -250,7 +250,7 @@ def concepts_to_ttl_kb_mapper( concepts ,
                         with open( ttl_output_filename , 'a' ) as out_fp:
                             out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
                             ## TODO - switch this to a pretty SemType name
-                            out_fp.write( '  :label "{}"@en;\n\n'.format( this_tui ) )
+                            out_fp.write( '  :label "{}"@en .\n\n'.format( this_tui ) )
             else:
             parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , tui )
             if( tui not in node_map ):
@@ -258,14 +258,14 @@ def concepts_to_ttl_kb_mapper( concepts ,
                 with open( ttl_output_filename , 'a' ) as out_fp:
                     out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
                     ## TODO - switch this to a pretty SemType name
-                    out_fp.write( '  :label "{}"@en;\n\n'.format( tui ) )
+                        out_fp.write( '  :label "{}"@en .\n\n'.format( tui ) )
         else:
             tui = ''
             parent_node = ''
         ## The head CUI is a better parent than the TUI
         if( 'head_cui' in concepts[ cui ] ):
             head_cui = concepts[ cui ][ 'head_cui' ]
-            parent_node = '{}/{}'.format( node_map[ 'utsRoot' ] , head_cui )
+            parent_node = '{}{}'.format( node_map[ 'utsRoot' ] , head_cui )
         ##
         variant_terms = sorted( list( concepts[ cui ][ 'variant_terms' ] ) )
         ## If the preferred term isn't in the variants list, then make
