@@ -429,9 +429,13 @@ def get_rxcui_umls_cui( rxcui_str ):
     #query = {'ticket':auth_client.getst(tgt)}
     r = requests.get( base_uri + content_endpoint )#,params=query)
     r.encoding = 'utf-8'
-    ##log( '{}\n---------------\n'.format( r ) )
     items  = json.loads(r.text)
     all_cuis = set()
+    if( 'propConceptGroup' not in items or
+        items[ 'propConceptGroup' ] is None or
+        'propConcept' not in items[ 'propConceptGroup' ] ):
+       return( all_cuis )
+    ##log.error( '{}\n---------------\n'.format( items ) )
     groupData = items[ "propConceptGroup" ][ "propConcept" ]
     ##log( '{}\n---------------\n{}'.format( items , groupData ) )
     for group in groupData:

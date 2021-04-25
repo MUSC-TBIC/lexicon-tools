@@ -216,8 +216,9 @@ def get_rxcui_ingredients( auth_client , concepts , rxcui_str , head = None ):
 ########################################################################
 
 
-
-def parse_focused_allergens( input_filename , concepts = {} , partials_dir = None ):
+def parse_focused_allergens( input_filename ,
+                             concepts = {} ,
+                             partials_dir = None ):
     ##
     cui_dict = {}
     synonym_dict = {}
@@ -387,6 +388,238 @@ def parse_focused_allergens( input_filename , concepts = {} , partials_dir = Non
             if( partials_dir is not None ):
                 with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
                     pickle.dump( [ cui_dict , synonym_dict , concepts ] , fp )
+    ####
+    return( concepts )
+
+
+def parse_allergens( input_filename ,
+                     concepts = {} ,
+                     partials_dir = None ,
+                     max_distance = -1 ):
+    ##
+    cui_dict = {}
+    standalone_queue = []
+    mth_queue = []
+    ##
+    expected_count = 0
+    with open( input_filename , 'r' ) as in_fp:
+        in_tsv = csv.DictReader( in_fp , dialect = 'excel-tab' )
+        for cols in in_tsv:
+            if( cols[ 'CUI' ] is not None and
+                cols[ 'CUI' ] != '' ):
+                expected_count += 1
+    with open( input_filename , 'r' ) as in_fp:
+        in_tsv = csv.DictReader( in_fp , dialect = 'excel-tab' )
+        for cols in tqdm( in_tsv ,
+                          desc = 'Reading in initial concept specs' ,
+                          total = expected_count ,
+                          leave = True ,
+                          file = sys.stdout ):
+            ## The first column can be named freely so we need to grab
+            ## the contents based on position rather than using the
+            ## dictionary key
+            alt_name = next( iter( cols ) )
+            if( len( alt_name ) == 0 ):
+                continue
+            ## CUI
+            head_cui = cols[ 'CUI' ]
+            include_umls_parents_str = cols[ 'Include parents (all RN)?' ]
+            ## set later if not None
+            parents_str = None ## cols[ 3 / 'Parents (or RO) to include (if some)' ] 
+            include_ro_str = cols[ 'Include RO?' ]
+            include_children_of_children_str = cols[ 'Include children of children' ]
+            ## SNOMED-CT conceptsIDs
+            snomed_concepts_str = cols[ 'SNOMED' ] 
+            rxcui_str = cols[ 'RxNORM (RxCUI)' ]
+            include_parents_str = cols[ 'Include parents (RxNORM ancestors)?' ]
+            exclude_children_str = cols[ 'Children to be excluded' ]
+            ## Do we need to process this line or can we just update our
+            ## model with a partial already saved in a pickle?
+            pickle_file = os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) )
+            if( partials_dir is not None and
+                os.path.exists( pickle_file ) ):
+                log.debug( 'Pickle file already exists for CUI {}. Loading and continuing to next.'.format( head_cui ) )
+                with open( pickle_file , 'rb' ) as fp:
+                    cui_dict , concepts = pickle.load( fp )
+                continue
+            ## Re-up the authentication token for every row
+            auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
+            ##
+            cui_dict[ head_cui ] = {}
+            concepts = seed_concept( concepts , cui = head_cui , head = None )
+            log.debug( 'Old CUI:\t{}'.format( head_cui ) )
+            ##
+            cui_dict[ head_cui ][ 'include_umls_parents_flag' ] = None
+            cui_dict[ head_cui ][ 'parents_include_list' ] = []
+            cui_dict[ head_cui ][ 'descendants_include_list' ] = []
+            cui_dict[ head_cui ][ 'descendants_exclude_list' ] = []
+            cui_dict[ head_cui ][ 'include_umls_ro_flag' ] = None
+            cui_dict[ head_cui ][ 'include_umls_children_of_children_flag' ] = None
+            cui_dict[ head_cui ][ 'include_rxnorm_parents_flag' ] = None
+            cui_dict[ head_cui ][ 'ro_include_list' ] = []
+            cui_dict[ head_cui ][ 'ro_exclude_list' ] = []
+            ## Child CUIs to Exclude
+            if( include_children_of_children_str.lower() == 'yes' and
+                max_distance != 0 ):
+                cui_dict[ head_cui ][ 'include_umls_children_of_children_flag' ] = True
+            else:
+                cui_dict[ head_cui ][ 'include_umls_children_of_children_flag' ] = False
+            if( exclude_children_str != '' ):
+                for this_cui in exclude_children_str.split( ',' ):
+                    this_cui = this_cui.lstrip( ' ' )
+                    this_cui = this_cui.strip( '"' )
+                    cui_dict[ head_cui ][ 'descendants_exclude_list' ].append( this_cui )
+                    log.debug( '\tEx: {}'.format( this_cui ) )
+            ## Include UMLS Parents (RN)
+            if( include_umls_parents_str.lower() == 'no' or
+                include_umls_parents_str.lower() == '' or
+                max_distance == 0 ):
+                cui_dict[ head_cui ][ 'include_umls_parents_flag' ] = False
+            elif( include_umls_parents_str.lower() == 'yes' ):
+                cui_dict[ head_cui ][ 'include_umls_parents_flag' ] = True
+                parent_cuis = uu.get_rns( auth_client , 'current' , head_cui )
+                for parent_cui in tqdm( parent_cuis ,
+                                        desc = 'Seeding parents' ,
+                                        leave = False ,
+                                        file = sys.stdout ):
+                    cui_dict[ head_cui ][ 'parents_include_list' ].append( parent_cui )
+                    log.debug( '\tP:  {}'.format( parent_cui ) )
+                    concepts = seed_concept( concepts , parent_cui , head_cui )
+                    standalone_queue.append( parent_cui )
+            elif( include_umls_parents_str.lower() != 'some' ):
+                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include Parents Flag' ,
+                                                        include_umls_parents_str ) )
+            # ##
+            ## Include UMLS RO (related other)
+            ## Include SNOMED Concepts -> CUIs
+            ## Include SNOMED Parents (ISA)
+            if( include_ro_str.lower() == 'no' or
+                max_distance == 0 ):
+                cui_dict[ head_cui ][ 'include_ro_flag' ] = False
+            elif( include_ro_str.lower() == 'yes' ):
+                cui_dict[ head_cui ][ 'include_ro_flag' ] = True
+                ro_cuis = uu.get_ros( auth_client , 'current' , head_cui )
+                for new_cui in tqdm( ro_cuis ,
+                                     desc = 'Seeding ROs' ,
+                                     leave = False ,
+                                     file = sys.stdout ):
+                    cui_dict[ head_cui ][ 'ro_include_list' ].append( new_cui )
+                    log.debug( '\tR:  {}'.format( new_cui ) )
+                    concepts = seed_concept( concepts , new_cui , head_cui )
+                    standalone_queue.append( new_cui )
+            elif( include_ro_str.lower() != 'some' ):
+                log.warning( 'Error:\t{}\n\t{}'.format( 'Unrecognized Include RO Flag' ,
+                                                        include_ro_str ) )
+            ##
+            if( include_umls_parents_str.lower() == 'some' or
+                include_ro_str.lower() == 'some' ):
+                parents_str = cols[  'Parents (or RO) to include (if some)' ]
+                for this_cui in tqdm( parents_str.split( ',' ) ,
+                                      desc = 'Seeding provided parent/RO list' ,
+                                      leave = False ,
+                                      file = sys.stdout ):
+                    this_cui = this_cui.strip( )
+                    this_cui = this_cui.strip( '"' )
+                    cui_dict[ head_cui ][ 'parents_include_list' ].append( this_cui )
+                    log.debug( '\tP:  {}'.format( this_cui ) )
+                    concepts = seed_concept( concepts , this_cui , head_cui )
+                    standalone_queue.append( this_cui )
+            # ##
+            if( max_distance != 0 ):
+                descendant_cuis = uu.get_first_umls_children( auth_client , head_cui ,
+                                                              cui_dict[ head_cui ][ 'descendants_exclude_list' ] ,
+                                                              get_grandchildren = cui_dict[ head_cui ][ 'include_umls_children_of_children_flag' ] )
+                for descendant_cui in tqdm( descendant_cuis ,
+                                            desc = 'Seeding descendants' ,
+                                            leave = False ,
+                                            file = sys.stdout ):
+                    log.debug( '\tD:  {}'.format( descendant_cui ) )
+                    concepts = seed_concept( concepts , descendant_cui , head_cui )
+                    mth_queue.append( descendant_cui )
+            # #####
+            if( rxcui_str.isdigit() and
+                max_distance != 0 ):
+                log.debug( '\tRx: {}'.format( rxcui_str ) )
+                concepts , brand_cuis = get_rxcui_brands( auth_client , concepts , rxcui_str , head = head_cui )
+                for brand_cui in tqdm( brand_cuis ,
+                                       desc = 'Seeding Brands' ,
+                                       leave = False ,
+                                       file = sys.stdout ):
+                    if( brand_cui in cui_dict[ head_cui ][ 'descendants_exclude_list' ] ):
+                        continue
+                    log.debug( '\t\tD:  {}'.format( brand_cui ) )
+                    concepts = seed_concept( concepts , brand_cui , head_cui )
+                    mth_queue.append( brand_cui )
+                concepts , ingredient_cuis = get_rxcui_ingredients( auth_client , concepts , rxcui_str , head = head_cui )
+                for ingredient_cui in tqdm( ingredient_cuis ,
+                                            desc = 'Seeding Ingredients' ,
+                                            leave = False ,
+                                            file = sys.stdout ):
+                    if( ingredient_cui in cui_dict[ head_cui ][ 'descendants_exclude_list' ] ):
+                        continue
+                    log.debug( '\t\tD:  {}'.format( ingredient_cui ) )
+                    concepts = seed_concept( concepts , ingredient_cui , head_cui )
+                    mth_queue.append( ingredient_cui )
+            elif( max_distance != 0 ):
+                for this_rxcui in rxcui_str.split( ',' ):
+                    this_rxcui = this_rxcui.lstrip( ' ' )
+                    this_rxcui = this_rxcui.strip( '"' )
+                    log.debug( '\tRC: {}'.format( this_rxcui ) )
+                    all_rxcuis = uu.get_rxclass_members( this_rxcui )
+                    for this_rxcui in tqdm( all_rxcuis ,
+                                            desc = 'Finding RxClass Members' ,
+                                            leave = False ,
+                                            file = sys.stdout ):
+                        log.debug( '\t\tRx: {}'.format( this_rxcui ) )
+                        rxcuis_umls_cui = uu.get_rxcui_umls_cui( this_rxcui )
+                        for umls_cui in tqdm( rxcuis_umls_cui ,
+                                              desc = 'Seeding RxClass Members' ,
+                                              leave = False ,
+                                              file = sys.stdout ):
+                            concepts = seed_concept( concepts , umls_cui , head_cui )
+                            mth_queue.append( umls_cui )
+                        concepts , brand_cuis = get_rxcui_brands( auth_client , concepts , this_rxcui , head = head_cui )
+                        for brand_cui in tqdm( brand_cuis ,
+                                               desc = 'Seeding Brands' ,
+                                               leave = False ,
+                                               file = sys.stdout ):
+                            if( brand_cui in cui_dict[ head_cui ][ 'descendants_exclude_list' ] ):
+                                continue
+                            log.debug( '\t\t\tD:  {}'.format( brand_cui ) )
+                            concepts = seed_concept( concepts , brand_cui , head_cui )
+                            mth_queue.append( brand_cui )
+                        concepts , ingredient_cuis = get_rxcui_ingredients( auth_client , concepts , this_rxcui , head = head_cui )
+                        for ingredient_cui in tqdm( ingredient_cuis ,
+                                                    desc = 'Seeding Ingredients' ,
+                                                    leave = False ,
+                                                    file = sys.stdout ):
+                            if( ingredient_cui in cui_dict[ head_cui ][ 'descendants_exclude_list' ] ):
+                                continue
+                            log.debug( '\t\t\tD:  {}'.format( ingredient_cui ) )
+                            concepts = seed_concept( concepts , ingredient_cui , head_cui )
+                            mth_queue.append( ingredient_cui )
+            ### Write out a uniq'd list of synonymous CUIs
+            concepts = flesh_out_seed_concept( auth_client , concepts , head_cui )
+            ## At the end of every loop, we want to update our partial file
+            ## with the latest datastructures (in pickle form)
+            if( partials_dir is not None ):
+                with open( os.path.join( partials_dir , 'processed_{}.pkl'.format( head_cui ) ) , 'wb' ) as fp:
+                    pickle.dump( [ cui_dict , concepts ] , fp )
+    ####
+    concepts = parse_problems_queue( cui_dict ,
+                                     concepts,
+                                     partials_dir ,
+                                     standalone_queue ,
+                                     [] ,
+                                     distance = 1 ,
+                                     max_distance = max_distance )
+    concepts = parse_problems_queue( cui_dict ,
+                                     concepts,
+                                     partials_dir ,
+                                     mth_queue ,
+                                     [] ,
+                                     distance = 1 ,
+                                     max_distance = max_distance )
     ####
     return( concepts )
 

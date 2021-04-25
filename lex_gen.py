@@ -162,7 +162,7 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
         if( 'tui' in concepts[ cui ] ):
             tui = concepts[ cui ][ 'tui' ]
             try:
-            token.set( 'umlsTui' , tui )
+                token.set( 'umlsTui' , tui )
             except TypeError as e:
                 log.error( 'Concept {} has unexpected TUI type:  {}'.format( cui , tui ) )
                 token.set( 'umlsTui' , '{}'.format( tui ) )
@@ -252,12 +252,12 @@ def concepts_to_ttl_kb_mapper( concepts ,
                             ## TODO - switch this to a pretty SemType name
                             out_fp.write( '  :label "{}"@en .\n\n'.format( this_tui ) )
             else:
-            parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , tui )
-            if( tui not in node_map ):
-                node_map[ tui ] = parent_node
-                with open( ttl_output_filename , 'a' ) as out_fp:
-                    out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
-                    ## TODO - switch this to a pretty SemType name
+                parent_node = '{}{}'.format( node_map[ 'semtypeRoot' ] , tui )
+                if( tui not in node_map ):
+                    node_map[ tui ] = parent_node
+                    with open( ttl_output_filename , 'a' ) as out_fp:
+                        out_fp.write( '<{}> a :Class;\n'.format( parent_node ) )
+                        ## TODO - switch this to a pretty SemType name
                         out_fp.write( '  :label "{}"@en .\n\n'.format( tui ) )
         else:
             tui = ''
@@ -475,8 +475,9 @@ if __name__ == "__main__":
                                                     wide_csv_output_filename ) )
     ##
     if( args.sourceType == 'medications' ):
-        concepts = csv_u.parse_focused_allergens( args.inputFile ,
-                                                  partials_dir = args.partialsDir )
+        concepts = csv_u.parse_allergens( args.inputFile ,
+                                          partials_dir = args.partialsDir ,
+                                          max_distance = args.maxDistance )
     elif( args.sourceType == 'problems' ):
         ## TODO - write explanation for file contents.
         ## TODO - create function to generate a new version of this file
