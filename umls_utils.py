@@ -382,17 +382,17 @@ def get_all_umls_descendants( auth_client , head_cui ,
 
 def get_all_snomed_descendants( auth_client , head_concept_id ,
                                 exclude_list ):
-      descendant_concept_ids = get_family_tree( auth_client , 'current' ,
-                                                head_concept_id ,
-                                                relation_type = 'children' )
-    include_list = []
-      for descendant_concept_id in descendant_concept_ids:
-         descendant_cui = get_cui( auth_client , 'current' , descendant_concept_id , 'SNOMEDCT_US' )
-         if( descendant_cui in exclude_list ):
-            continue
-         include_list.append( descendant_cui )
-         include_list += get_all_snomed_descendants( auth_client , descendant_concept_id ,
-                                                     exclude_list )
+   descendant_concept_ids = get_family_tree( auth_client , 'current' ,
+                                             head_concept_id ,
+                                             relation_type = 'children' )
+   include_list = []
+   for descendant_concept_id in descendant_concept_ids:
+      descendant_cui = get_cui( auth_client , 'current' , descendant_concept_id , 'SNOMEDCT_US' )
+      if( descendant_cui in exclude_list ):
+         continue
+      include_list.append( descendant_cui )
+      include_list += get_all_snomed_descendants( auth_client , descendant_concept_id ,
+                                                  exclude_list )
    return include_list
 
 ########################################################################
