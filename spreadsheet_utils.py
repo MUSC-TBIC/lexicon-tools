@@ -91,7 +91,7 @@ def flesh_out_seed_concept( auth_client , concepts , cui ):
                                               cui )
         log.debug( '\tVariant Terms:  {}'.format( variant_terms ) )
         concepts[ cui ][ 'variant_terms' ] = variant_terms
-        ##
+    ##
     return( concepts )
 
 
@@ -902,9 +902,20 @@ def parse_focused_problems_tsv( input_filename ,
     auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
     cui_dict = {}
     ##
+    expected_count = 0
     with open( input_filename , 'r' ) as in_fp:
         in_tsv = csv.DictReader( in_fp , dialect = 'excel-tab' )
         for cols in in_tsv:
+            if( cols[ 'CUI' ] is not None and
+                cols[ 'CUI' ] != '' ):
+                expected_count += 1
+    with open( input_filename , 'r' ) as in_fp:
+        in_tsv = csv.DictReader( in_fp , dialect = 'excel-tab' )
+        for cols in tqdm( in_tsv ,
+                          desc = 'Reading in initial concept specs' ,
+                          total = expected_count ,
+                          leave = True ,
+                          file = sys.stdout ):
             ## The first column can be named freely so we need to grab
             ## the contents based on position rather than using the
             ## dictionary key
@@ -1009,7 +1020,7 @@ def parse_focused_problems_tsv( input_filename ,
                             cui_dict[ head_cui ][ 'parents_include_list' ].append( this_parent_cui )
             else:
                 log.warning( 'Error:\t{}:\t\'{}\''.format( 'Unrecognized Include SNOMED Parents Flag' ,
-                                                      include_snomed_parents_str ) )
+                                                           include_snomed_parents_str ) )
             ########################            
             ##
             if( snomed_concepts_str == 'None' or
@@ -1025,8 +1036,8 @@ def parse_focused_problems_tsv( input_filename ,
 
 
 def parse_problems( input_filename ,
-                            concepts = {} ,
-                            engine = 'api' ,
+                    concepts = {} ,
+                    engine = 'api' ,
                     partials_dir = None ,
                     max_distance = -1 ):
     ## If no patials directory was provided, then initialized these
@@ -1050,7 +1061,7 @@ def parse_problems( input_filename ,
     if( engine == 'api' and
         uu.UMLS_API_TOKEN is not None ):
         cui_dict , concepts = parse_problems_via_api( cui_dict ,
-                                                              concepts ,
+                                                      concepts ,
                                                       partials_dir = partials_dir ,
                                                       max_distance = max_distance )
     elif( engine == 'py-umls' and
@@ -1124,17 +1135,17 @@ def parse_problems_via_api( cui_dict ,
         ##
         exclude_list = cui_dict[ head_cui ][ 'descendants_exclude_list' ]
         if( max_distance != 0 ):
-        descendant_cuis = uu.get_rbs( auth_client , 'current' , head_cui )
-        log.debug( 'Grabbed RBs. descendant cui n = {}'.format( len( descendant_cuis ) ) )
+            descendant_cuis = uu.get_rbs( auth_client , 'current' , head_cui )
+            log.debug( 'Grabbed RBs. descendant cui n = {}'.format( len( descendant_cuis ) ) )
             for descendant_cui in tqdm( descendant_cuis ,
                                         desc = 'Seeding descendants' ,
                                         leave = False ,
                                         file = sys.stdout ):
-            if( descendant_cui in exclude_list or
-                descendant_cui in concepts ):
-                continue
-            concepts = seed_concept( concepts , descendant_cui , head_cui )
-            mth_queue.append( descendant_cui )
+                if( descendant_cui in exclude_list or
+                    descendant_cui in concepts ):
+                    continue
+                concepts = seed_concept( concepts , descendant_cui , head_cui )
+                mth_queue.append( descendant_cui )
         log.debug( 'Done with descendants' )
         ##
         for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_parent_list' ] ,
@@ -1148,23 +1159,23 @@ def parse_problems_via_api( cui_dict ,
         if( max_distance != 0 ):
             for snomed_cui in tqdm( cui_dict[ head_cui ][ 'snomed_include_list' ] ,
                                     desc = 'Finding SNOMED Concepts' ,
-                                leave = False ,
-                                file = sys.stdout ):
-            ## TODO NEXT - walk SNOMED in parallel to MTH
-            descendant_concept_ids = uu.get_family_tree( auth_client , 'current' ,
-                                                         snomed_cui ,
-                                                         relation_type = 'children' )
+                                    leave = False ,
+                                    file = sys.stdout ):
+                ## TODO NEXT - walk SNOMED in parallel to MTH
+                descendant_concept_ids = uu.get_family_tree( auth_client , 'current' ,
+                                                             snomed_cui ,
+                                                             relation_type = 'children' )
                 for descendant_concept_id in tqdm( descendant_concept_ids ,
                                                    desc = 'Seeding SNOMED descendant concepts' ,
                                                    leave = False ,
                                                    file = sys.stdout ):
-                descendant_cui = uu.get_cui( auth_client , 'current' ,
-                                             descendant_concept_id , 'SNOMEDCT_US' )
-                if( descendant_cui in exclude_list or
-                    descendant_cui in concepts ):
-                    continue
-                concepts = seed_concept( concepts , descendant_cui , head_cui )
-                mth_queue.append( descendant_cui )
+                    descendant_cui = uu.get_cui( auth_client , 'current' ,
+                                                 descendant_concept_id , 'SNOMEDCT_US' )
+                    if( descendant_cui in exclude_list or
+                        descendant_cui in concepts ):
+                        continue
+                    concepts = seed_concept( concepts , descendant_cui , head_cui )
+                    mth_queue.append( descendant_cui )
         log.debug( 'Done with SNOMED' )
         ## At the end of every loop, we want to update our partial file
         ## with the latest datastructures (in pickle form)

@@ -10,6 +10,7 @@ import time
 
 ## TODO - allow this to be passed via command line or environment variable
 UMLS_API_TOKEN = 'NOT-A-REAL-TOKEN-ASDF-QWERTY'
+UMLS_API_TOKEN = 'e4dcd9c2-cafd-4dee-a90d-760476c64fac'
 
 last_auth_time = None
 last_auth_client = None
@@ -46,6 +47,7 @@ def search_umls( auth_client , version , identifier , source ,
                                                                        source ,
                                                                        input_type ,
                                                                        return_type ) )
+   auth_client = init_authentication( UMLS_API_TOKEN )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/search/current?string="+str(identifier) + \
@@ -146,6 +148,7 @@ def get_family_tree( auth_client , version , identifier ,
    log.debug( 'call to get_family_tree( ... , {} , ... )'.format( identifier ) )
    current_page = 1
    last_page = 1
+   auth_client = init_authentication( UMLS_API_TOKEN )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/content/current/source/" + str( root_source ) + "/"+str(identifier) + "/" + str( relation_type )
@@ -221,6 +224,7 @@ def get_cuis_atom( auth_client , version , identifier , atom_type ):
    log.debug( 'call to get_cuis_atom( ... , {} , {} )'.format( identifier , atom_type ) )
    current_page = 1
    last_page = 1
+   auth_client = init_authentication( UMLS_API_TOKEN )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    atom_string = ''
@@ -289,6 +293,7 @@ def get_typed_relation( auth_client , version , identifier , target_relation_typ
    log.debug( 'call to get_typed_relation( ... , {} , {} , {} )'.format( identifier , target_relation_type , target_relation_label ) )
    current_page = 1
    last_page = 1
+   auth_client = init_authentication( UMLS_API_TOKEN )
    tgt = auth_client.gettgt()
    uri = "https://uts-ws.nlm.nih.gov"
    content_endpoint = "/rest/content/current/CUI/"+str(identifier) + "/" + str(target_relation_type)
