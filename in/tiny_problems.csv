@@ -1,0 +1,3 @@
+PROBLEM_DESCRIPTION	CUI	Include parents (all RN)?	Parents (or RO) to include (if some)	Include RO?	RO to exclude	SNOMED-CT conceptsIDs	Include parents (SNOMED ancestors)?	Ancestors to include (if some)	Children to be excluded
+Abdominal pain	C0000737	No		No		21522001	No		
+Acute bronchitis	C0149514	No		No		"10509002, 35301006"	No	"111273006, 128482007"	

@@ -27,7 +27,7 @@ def parse_snomedct_core( filename ):
                 concepts[ umls_cui ][ 'SNOMEDCT' ] = {}
             concepts[ umls_cui ][ 'SNOMEDCT' ][ snomed_cid ] = {}
             concepts[ umls_cui ][ 'SNOMEDCT' ][ snomed_cid ][ 'FSN' ] = fully_specified_name
-    auth_client = uu.init_authentication( UMLS_API_TOKEN )
+    auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
     i = 0
     for cui in tqdm( concepts , desc = 'Extracting Terms' ):
         i += 1
@@ -36,7 +36,7 @@ def parse_snomedct_core( filename ):
             concepts[ cui ][ 'preferred_term' ] = ''
             concepts[ cui ][ 'variant_terms' ] = set()
             continue
-            auth_client = uu.init_authentication( UMLS_API_TOKEN )
+            auth_client = uu.init_authentication( uu.UMLS_API_TOKEN )
         preferred_term = uu.get_cuis_preferred_atom( auth_client ,
                                                      'current' ,
                                                      cui )

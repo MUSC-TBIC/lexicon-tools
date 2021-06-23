@@ -6,12 +6,13 @@ Documentation for these `Lexicon Tools` is managed via reStructuredText files an
 If you don't have Sphinx installed, you should check out a quick primer (`First Steps with Sphinx <http://www.sphinx-doc.org/en/1.7/tutorial.html>`_) or install it as below:
 
 ```
-## If you don't have Sphinx installed already
-pip install Sphinx
+  ## If you don't have Sphinx installed already
+  pip install Sphinx
 
-## Generate a locally viewable HTML version
-cd docs
-make html
+  ## Generate a locally viewable HTML version
+  cd docs
+  make html
+
 ```
 
 The latest version of the documentation can be generated as locally viewable HTML:  file:///path/to/git/repository/docs/_build/html/index.html
@@ -25,6 +26,7 @@ python3 lex_gen.py \
     focusedProblem \
     batch1 \
     sample_problems.csv
+
 ```
 
 Leveraging RxNorm concepts and relations
@@ -35,6 +37,7 @@ python3 lex_gen.py \
     focusedAllergen \
     batchA \
     sample_allergens.csv
+
 ```
 
 UMLS Engines
@@ -60,6 +63,7 @@ you'll need to install `py-umls` as a submodule:
 
 ```
 git submodule add https://github.com/chb/py-umls umls
+
 ```
 
 Otherwise, you should be able to down the `py-umls` source code just

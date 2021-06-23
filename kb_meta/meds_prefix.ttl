@@ -1,0 +1,25 @@
+@prefix : <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+:subClassOf a rdf:Property;
+  :label "subClassOf"@en .
+
+rdf:type a rdf:Property;
+  :label "type"@en .
+
+:label a rdf:Property;
+  :label "label"@en;
+  :range "http://www.w3.org/2001/XMLSchema#string" .
+
+:comment a rdf:Property;
+  :label "comment"@en;
+  :range "http://www.w3.org/2001/XMLSchema#string" .
+
+:subPropertyOf a rdf:Property;
+  :label "subPropertyOf"@en .
+
+<http://www.ukp.informatik.tu-darmstadt.de/inception/1.0#node1eoocu2ncx1> a rdf:Property;
+  :label "RXCUI"@en .
+
+<http://www.ukp.informatik.tu-darmstadt.de/inception/1.0#node1eoocu2ncx2> a rdf:Property;
+  :label "ATC ID"@en .
