@@ -6,7 +6,7 @@ Welcome to Lexicon Tools's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: HIgh-Level Content:
+   :caption: High-Level Content:
 
    README
 

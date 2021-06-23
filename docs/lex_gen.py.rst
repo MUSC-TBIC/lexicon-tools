@@ -8,5 +8,6 @@ lex_gen.py:  Create Targeted Terminologies
 
    lex_gen_input_filter
    lex_gen_ontology_options
+   lex_gen_intermediate_formats
    lex_gen_output_formats
 
