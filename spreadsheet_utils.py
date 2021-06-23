@@ -874,7 +874,7 @@ def parse_focused_problems_via_py_umls( input_filename , concepts , partials_dir
                                 desc = 'Finding SNOMED Parents' ,
                                 leave = False ,
                                 file = sys.stdout ):
-            log.debug( '\tR:  {}'.format( ro_cui ) )
+            log.debug( '\tSn:  {}'.format( snomed_cui ) )
             concepts = flesh_out_concept_via_py_umls( concepts , snomed_cui , head = head_cui )
         ################################################################
         ## TODO - configuration file left to parse
@@ -1152,7 +1152,7 @@ def parse_problems_via_api( cui_dict ,
                                 desc = 'Finding SNOMED Parents' ,
                                 leave = False ,
                                 file = sys.stdout ):
-            log.debug( '\tR:  {}'.format( ro_cui ) )
+            log.debug( '\tSn:  {}'.format( snomed_cui ) )
             standalone_queue.append( snomed_cui )
             concepts = seed_concept( concepts , snomed_cui , head_cui )
         ##
@@ -1250,7 +1250,7 @@ def parse_problems_queue( cui_dict ,
 
 if __name__ == "__main__":
     input_filename = '/tmp/Book3.txt'
-    cui_dict , concepts = parse_focused_problems( input_filename , concepts = {} )
+    cui_dict , concepts = parse_focused_problems_tsv( input_filename , concepts = {} )
     root = cm.create_concept_mapper_template()
     for cui in sorted( cui_dict ):
         preferred_term = concepts[ cui ][ 'preferred_term' ]

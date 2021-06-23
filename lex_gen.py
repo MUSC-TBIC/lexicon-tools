@@ -7,6 +7,8 @@ import argparse
 
 import csv
 
+import pickle
+
 try:
     from lxml import etree
     log.debug("running with lxml.etree")
@@ -169,10 +171,13 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
         else:
             tui = ''
         token.set( 'canonical' , preferred_term )
-        token.set( 'umlsCui' , cui )
+        token.set( 'conceptType' , 'CUI' )
+        token.set( 'conceptCode' , cui )
         all_fsns = set()
         if( 'head_cui' in concepts[ cui ] ):
-            token.set( 'headCui' ,  concepts[ cui ][ 'head_cui' ] )            
+            token.set( 'basicLevelConceptType' , 'CUI' )
+            token.set( 'basicLevelConceptCode' , 
+                       concepts[ cui ][ 'head_cui' ] )            
         ## TODO - this is a simple hack so we don't have to do
         ##        a check for SNOMEDCT entries in the next
         ##        for loop.

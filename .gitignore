@@ -1,7 +1,12 @@
 \.\#*
+\#*
 
 *.csv
+*.pkl
 *.pyc
+
+.coverage
+cov_html*/
 
 docs/_build
 in/

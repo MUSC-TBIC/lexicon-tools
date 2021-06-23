@@ -1,0 +1,6 @@
+lxml
+tqdm
+requests
+pytest
+pytest-cov
+mock
