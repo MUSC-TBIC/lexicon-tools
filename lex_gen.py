@@ -150,7 +150,11 @@ def concepts_to_concept_mapper( concepts , concept_mapper_filename , cui_list = 
     for cui in cui_list:
         token = etree.Element( "token" )
         ##
-        variant_terms = concepts[ cui ][ 'variant_terms' ]
+        try:
+            variant_terms = concepts[ cui ][ 'variant_terms' ]
+        except KeyError as e:
+            log.warning( 'Concept \'{}\' lacks any variant_terms'.format( cui ) )
+            variant_terms = []
         if( 'preferred_term' in concepts[ cui ] ):
             preferred_term = concepts[ cui ][ 'preferred_term' ]
             if( preferred_term is None ):
