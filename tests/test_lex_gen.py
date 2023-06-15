@@ -27,3 +27,16 @@ def test_default_init_args():
         assert args.batchName == 'testBatch001'
         assert args.partialsDir == 'partials'
         assert args.outputDir == 'out'
+
+#############################################
+## Extracting concepts
+#############################################
+
+def test_extract_concepts_from_tiny_problems():
+    csv_concepts = lex_gen.concepts_from_csv( 'in/tiny_problems.csv' )
+    assert len( csv_concepts ) == 3
+
+
+def test_extract_concepts_from_tiny_problems_with_gaps():
+    csv_concepts = lex_gen.concepts_from_csv( 'in/tiny_missing_cuis.csv' )
+    assert len( csv_concepts ) == 4

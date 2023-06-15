@@ -1,4 +1,3 @@
-
 import logging as log
 import os
 import sys
@@ -224,9 +223,7 @@ def parse_focused_allergens( input_filename ,
     synonym_dict = {}
     ##
     with open( input_filename , 'r' ) as in_fp:
-        in_tsv = csv.reader( in_fp , dialect=csv.excel_tab )
-        ## Skip the header
-        headers = next( in_tsv , None )
+        in_tsv = csv.DictReader( in_fp , dialect=csv.excel_tab )
         for cols in tqdm( in_tsv , desc = 'Fixed rows' , total = 137 ,
                           file = sys.stdout ):
             ## ALLERGEN_DESCRIPTION
@@ -924,6 +921,11 @@ def parse_focused_problems_tsv( input_filename ,
                 continue
             ## UMLS concepts
             head_cui = cols[ 'CUI' ]
+            if( head_cui is None or
+                head_cui == '' ):
+                continue
+            with open( '/tmp/bob_u.csv' , 'w' ) as fp:
+                fp.write( 'CUI = |{}|\n\n{}\n\n{}'.format( head_cui , cui_dict , concepts ) )
             include_umls_parents_str = cols[ 'Include parents (all RN)?' ]
             ## set later if not None
             parents_str = None ## cols[ 3 / 'Parents (or RO) to include (if some)' ]
